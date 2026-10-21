@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assentgate"
+version = "0.1.0"
+description = "Argument-level authorization and selective confirmation for tool-using AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# Added once the corresponding milestone starts (see README roadmap).
+data = ["pandas"]
+ml = ["torch", "transformers", "sentence-transformers", "scikit-learn"]
+api = ["fastapi", "uvicorn"]
+demo = ["streamlit"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

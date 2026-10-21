@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Local data, models and audit logs
+data/raw/
+data/interim/
+# Regenerated from the pinned AgentDojo commit (see docs/data_sources.md)
+data/processed/agentdojo_*.jsonl
+models/
+*.sqlite
+*.db
