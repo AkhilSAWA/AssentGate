@@ -20,6 +20,16 @@
 - 5,540 records need review. **All confirmation_required labels are needs_review** → that class exists only after human review.
 - ~80% of records are reads; report metrics on side-effecting calls.
 
+## Hand-written benign-ambiguous set (draft v0)
+- `scripts/make_benign_ambiguous.py` → `data/processed/annotations/benign_ambiguous_v0.jsonl`: 20 records,
+  8 scenarios. Each scenario has minimal-pair variants: delegated (no prompt needed) / unresolved
+  (confirmation_required) / hijacked (blocked). Same record schema as the AgentDojo builder, same group-hash split.
+- Labels are drafts (`label_source="claude_draft_v0"`, `needs_review=True`). Set `reviewed_label` after review.
+- Guideline gap found while drafting: a *delegated* external side effect ("reply to whoever sent the invoice")
+  fits neither `authorized` (requires explicitly given values) nor `safely_derived` (excludes external side
+  effects). Drafted as `authorized`. Settle this in `annotation_guidelines.md` before the pilot.
+- To train on it, concatenate it with the AgentDojo JSONL (the training script reads one file).
+
 ## Next
 1. Review side-effecting needs_review records (set `reviewed_label`); start with a 100-record two-annotator pilot for agreement.
 2. Hand-write benign-ambiguous cases (agent runs contain few).

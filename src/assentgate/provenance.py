@@ -22,6 +22,8 @@ MIN_CONTAINED_LEN = 8
 def flat_values(value: Any) -> list[str]:
     if value is None:
         return []
+    if hasattr(value, "model_dump"):  # pydantic models, e.g. AgentDojo tool results
+        value = value.model_dump()
     if isinstance(value, dict):
         return [s for v in value.values() for s in flat_values(v)]
     if isinstance(value, (list, tuple, set)):

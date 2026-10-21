@@ -16,6 +16,8 @@ dev = ["pytest>=8"]
 data = ["pandas"]
 ml = ["torch", "transformers", "sentence-transformers", "scikit-learn"]
 api = ["fastapi", "uvicorn"]
+# AgentDojo pinned to the commit recorded in docs/data_sources.md.
+eval = ["agentdojo @ git+https://github.com/ethz-spylab/agentdojo@089ed468cf3ed0322acc66b0211f26d9d90dbf60"]
 demo = ["streamlit"]
 
 [tool.setuptools.packages.find]

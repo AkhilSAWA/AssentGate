@@ -157,6 +157,20 @@ def test_opt_in_public_visibility_floor(workspace):
     assert out.affected_fields == ["visibility"]
 
 
+def test_tool_level_rules_ignore_arguments(workspace):
+    from assentgate import ToolLevelRules
+
+    dispatcher = make_dispatcher(workspace, classifier=ToolLevelRules())
+    internal = dispatcher.submit(forward_inbox("colleague@me.example"))
+    assert internal.result.decision is Decision.CONFIRMATION_REQUIRED  # same tool, same answer
+    event = dispatcher.submit(
+        request("create_calendar_event", title="Flight", start_time="2026-11-02 09:00",
+                end_time="2026-11-02 11:00", participants=["anyone@other.example"])
+    )
+    assert event.result.decision is Decision.AUTHORIZED and event.executed
+    assert dispatcher.submit(read_flight_email()).result.decision is Decision.SAFELY_DERIVED
+
+
 # --- Scoped approvals ---------------------------------------------------------
 
 

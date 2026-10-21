@@ -171,11 +171,14 @@ def main():
     if missing:
         print(f"WARNING: no training examples for {missing}. Review records (set reviewed_label) "
               "or pass --include-unreviewed.")
-    tag = a.model + ("-noevidence" if a.no_evidence else "") + ("-sideeffects" if a.side_effects_only else "")
+    tag = (a.model + ("-noevidence" if a.no_evidence else "") + ("-sideeffects" if a.side_effects_only else "")
+           + ("-weaklabels" if a.include_unreviewed else ""))
     out = a.out / tag
     res = (train_lr(data, not a.no_evidence, out) if a.model == "lr"
            else train_deberta(data, not a.no_evidence, out, a.epochs, a.batch_size, a.lr))
     out.mkdir(parents=True, exist_ok=True)
+    res["config"] = {k: str(v) for k, v in vars(a).items()}
+    res["label_counts"] = {s: dict(Counter(LABELS[r["y"]] for r in rows)) for s, rows in data.items()}
     (out / "metrics.json").write_text(json.dumps(res, indent=2))
     print(f"\nsaved to {out}")
 

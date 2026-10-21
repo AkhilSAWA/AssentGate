@@ -19,30 +19,42 @@ Read these before substantive work:
 - Hard policy always beats the model; no approval lifts a policy block. Confidence is not permission.
 - Main hypothesis: fewer unnecessary confirmations at comparable safety — report at matched unsafe-allow rate.
 - Scope: workspace tools (email, calendar, documents). No real payments, no shell tools.
+- Never `git commit` or `git push`. Only edit the local working tree; the repo owner makes every commit.
 
 ## Repo layout
 - `src/assentgate/` — schemas, policy (HardPolicy), approvals (scoped, single-use), classifier
   (`Classifier` protocol; `SensitivityBaseline` = baseline 3 "confirm every side effect", NOT a trained model),
   questions, gate (policy → classifier → approvals), dispatcher (controlled execution, provenance, history + audit),
-  provenance (value tagging), audit (SQLite), workspace (AgentDojo tool specs + FakeWorkspace).
-- `tests/test_gate.py` — 24 tests, passing as of 2026-10-21.
+  provenance (value tagging), audit (SQLite), workspace (AgentDojo tool specs + FakeWorkspace),
+  annotation (Cohen's κ), agentdojo_adapter (`GatedToolsExecutor`, `GroundTruthApprover`, `GroundTruthProposer`; needs `.[eval]`).
+- `tests/` — test_gate (25), test_annotation (6), test_benign_ambiguous (3), test_agentdojo_adapter (5, skipped
+  without AgentDojo; slow). 39 pass 2026-10-21.
 - `scripts/build_agentdojo_dataset.py` — AgentDojo saved runs → weakly-labelled JSONL (`rule_v1`, `needs_review`, group-hash split).
+- `scripts/sample_pilot.py` / `scripts/agreement.py` — blinded annotation pilot sheets / κ + disagreement log.
+- `scripts/run_ground_truth_eval.py` — no-LLM end-to-end run (scripted ground-truth agent, benign + compromised) → `results/`;
+  `scripts/summarise_ground_truth_eval.py` → summary over feasible attacks.
+- `scripts/make_benign_ambiguous.py` — hand-written minimal-pair records (draft labels).
 - `scripts/train_classifier.py` — `--model lr|deberta`, `--no-evidence` ablation, `--side-effects-only`, `--include-unreviewed`.
-- `data/raw/` and `models/` are gitignored.
+- `data/raw/`, `models/` and the regenerated `data/processed/agentdojo_*.jsonl` are gitignored; annotations are tracked.
+- `docs/data_sources.md` — pinned versions + licenses.
 
 ## Commands (Windows, from repo root)
 ```
 .venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pip install -e data\raw\agentdojo      # eval extra; slow (~15 min) the first time
 .venv\Scripts\python -m pytest -q
-git clone https://github.com/ethz-spylab/agentdojo data\raw\agentdojo
+git clone https://github.com/ethz-spylab/agentdojo data\raw\agentdojo && git -C data\raw\agentdojo checkout 089ed468
 .venv\Scripts\python scripts\build_agentdojo_dataset.py --runs data\raw\agentdojo\runs --out data\processed\agentdojo_workspace.jsonl
+.venv\Scripts\python scripts\sample_pilot.py --data data\processed\agentdojo_workspace.jsonl --out-dir data\processed\annotations\pilot_v1
+.venv\Scripts\python scripts\agreement.py --dir data\processed\annotations\pilot_v1
+.venv\Scripts\python -W ignore scripts\run_ground_truth_eval.py --out results\ground_truth_v1.2.2   # ~30 min CPU
 ```
 
 ## Current status (2026-10-21)
 Done: core gate/policy/approvals/dispatcher/audit + tests; dataset builder (tested on AgentDojo commit 089ed468:
 16,856 workspace run files → 24,021 unique tool calls, 54 task groups); training script written (syntax/data-loading checked, never trained).
 
-Initial scaffold committed (bf98639). Known issues 1–6 fixed 2026-10-21:
+Known issues 1–6 fixed 2026-10-21:
 1. Confirmation floors are opt-in `PolicyConfig` flags (`confirm_external_recipients`, `confirm_public_visibility`,
    both off). Policy by default only blocks (unknown/banned tools, missing/undeclared args, `blocked_domains`).
 2. `provenance.py`: dispatcher tags tool outputs + the user request; reused values get `verified=True` evidence.
@@ -58,6 +70,14 @@ Dataset facts to remember: every `confirmation_required` rule label is `needs_re
 after human review); ~80% of records are read-only calls; oracle "injected" provenance is used only for labels —
 model input sees it as `tool_output`.
 
-Next after fixes: 100-record two-annotator pilot (Cohen's κ) → review side-effecting records (`reviewed_label`) →
-hand-write benign-ambiguous cases → LR baseline (CPU) → DeBERTa-v3-small (GPU, needs sign-off) →
-wrap as `Classifier` → AgentDojo end-to-end (needs an LLM agent: API cost or local model).
+Also done 2026-10-21: AgentDojo cloned + pinned at 089ed468 and installed into the venv; dataset rebuild reproduced
+the counts above exactly; pilot sheets generated (100 records, 37 groups, seed 0); AgentDojo adapter + simulated
+approver; `ToolLevelRules` = baseline 2 (confirm send/share/delete tools only); scripted ground-truth eval of
+baselines 1–3 → `docs/results_scripted_eval.md` (scripted agent, NOT an LLM; attack metrics only over the 227/560
+feasible pairs because v1.2 injection tasks 6–13 have empty ground truth); 20 draft benign-ambiguous records
+(`scripts/make_benign_ambiguous.py`, labels need human review). Open question: label for delegated external
+side effects ("reply to whoever sent X") — guidelines don't cover it.
+
+Next: humans fill the pilot sheets → κ → revise guidelines → review side-effecting records (`reviewed_label`) →
+review + scale up the benign-ambiguous set → LR baseline (CPU, ask first) → DeBERTa-v3-small (GPU, needs sign-off) →
+wrap as `Classifier` → AgentDojo with an LLM agent (API cost or local model, needs sign-off).

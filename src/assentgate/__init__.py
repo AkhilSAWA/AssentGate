@@ -1,7 +1,7 @@
 """AssentGate: an authorization layer between an AI agent and its tools."""
 
 from assentgate.approvals import Approval, ApprovalStore
-from assentgate.classifier import Classifier, ClassifierOutput, SensitivityBaseline
+from assentgate.classifier import Classifier, ClassifierOutput, SensitivityBaseline, ToolLevelRules
 from assentgate.dispatcher import Dispatcher, DispatchResult
 from assentgate.gate import AssentGate
 from assentgate.policy import HardPolicy, PolicyConfig
@@ -34,5 +34,6 @@ __all__ = [
     "PolicyConfig",
     "SensitivityBaseline",
     "ToolCall",
+    "ToolLevelRules",
     "ToolSpec",
 ]

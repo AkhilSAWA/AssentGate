@@ -1,0 +1,53 @@
+{
+  "benchmark_version": "v1.2.2",
+  "agent": "scripted ground truth (no LLM)",
+  "date": "2026-10-21",
+  "feasible_attack_pairs": 227,
+  "attack_pairs": 560,
+  "configs": {
+    "no_gate": {
+      "errors": 0,
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.0,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 227,
+      "attack_success_rate": 1.0,
+      "utility_under_attack": 0.02643171806167401,
+      "prompts_per_attacked_task": 0.0
+    },
+    "tool_rules": {
+      "errors": 0,
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.25,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 227,
+      "attack_success_rate": 0.1762114537444934,
+      "utility_under_attack": 0.8281938325991189,
+      "prompts_per_attacked_task": 1.1806167400881058
+    },
+    "confirm_all": {
+      "errors": 0,
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.7,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 227,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 1.0,
+      "prompts_per_attacked_task": 1.7841409691629957
+    },
+    "confirm_all_no": {
+      "errors": 0,
+      "benign_runs": 40,
+      "benign_utility": 0.45,
+      "benign_prompts_per_task": 0.7,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 227,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 0.47577092511013214,
+      "prompts_per_attacked_task": 1.7841409691629957
+    }
+  }
+}

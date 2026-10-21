@@ -6,23 +6,24 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 ## Phase 0 — Foundations (week 1)  ← you are here
 - [x] Repo scaffold: schemas, policy, scoped approvals, gate, dispatcher, audit, tests (`src/assentgate/`). FastAPI deferred.
 - [x] Fix known issues listed in `CLAUDE.md` (policy confirmation floor, unchecked extra args, approval normalisation, history wiring) and make the first git commit.
-- [~] Clone and **pin** AgentDojo (builder tested on commit 089ed468) (and InjecAgent) to a specific commit/release; record versions in `docs/data_sources.md`.
-- [ ] Read each repo's LICENSE and record it before redistributing any derived data.
+- [~] Clone and **pin** AgentDojo (builder tested on commit 089ed468) (and InjecAgent) to a specific commit/release; record versions in `docs/data_sources.md`. (AgentDojo pinned + recorded; InjecAgent not cloned yet.)
+- [~] Read each repo's LICENSE and record it before redistributing any derived data. (AgentDojo MIT read; InjecAgent MIT per repo page only.)
 - [ ] Literature review: read the 5 core papers properly + search for newer argument-level / confirmation work. Write `docs/related_work.md` and a one-paragraph *narrow* novelty claim.
 - [ ] Freeze the annotation guidelines draft (`docs/annotation_guidelines.md`).
 
 ## Phase 1 — AgentDojo integration + cheap baselines (weeks 1–2)
 - [x] Map AgentDojo's **workspace** suite tools (email / calendar / cloud drive) to `src/assentgate/workspace.py` (use AgentDojo's tool names/args).
-- [ ] Insert AssentGate in front of tool execution in the AgentDojo agent pipeline (check the pinned version's pipeline API for where a defense element goes).
-- [~] **Instrument provenance**: tag every value returned by a tool; when a later call argument contains a tagged value, emit `ArgumentEvidence(source=tool_output, verified=True)`. This is what makes "source evidence" real rather than guessed. (Done in our `Dispatcher` via `provenance.py`; still needs wiring into the AgentDojo pipeline.)
-- [ ] Simulated approver: answers confirmation questions from ground truth (yes for benign task needs, no for injected goals). Needed to measure task completion with confirmations.
+- [x] Insert AssentGate in front of tool execution in the AgentDojo agent pipeline (check the pinned version's pipeline API for where a defense element goes). (`agentdojo_adapter.GatedToolsExecutor` replaces `ToolsExecutor`.)
+- [x] **Instrument provenance**: tag every value returned by a tool; when a later call argument contains a tagged value, emit `ArgumentEvidence(source=tool_output, verified=True)`. This is what makes "source evidence" real rather than guessed. (`provenance.py`, applied inside AgentDojo via `GatedToolsExecutor`.)
+- [x] Simulated approver: answers confirmation questions from ground truth (yes for benign task needs, no for injected goals). Needed to measure task completion with confirmations. (`GroundTruthApprover`; conservative — declines benign calls that differ from the ground-truth route.)
+- [x] No-LLM end-to-end check: `scripts/run_ground_truth_eval.py` runs a scripted ground-truth agent (benign + fully compromised) through baselines 1–3 (baseline 2 = `ToolLevelRules`). Results: `docs/results_scripted_eval.md`. Not a substitute for the LLM-agent runs below.
 - [ ] ⚠ Run baselines 1–3 end-to-end (no gate, tool-level rules, confirm-every-sensitive-action). Requires an LLM agent → API cost or a local model.
 
 ## Phase 2 — Dataset (weeks 2–4)
 - [x] `scripts/build_agentdojo_dataset.py`: AgentDojo saved runs → JSONL with rule labels (see `docs/dataset_and_training.md`).
 - [ ] Manually review `needs_review` side-effecting records (`reviewed_label`).
-- [ ] **Add benign-but-ambiguous cases** (recipient legitimately taken from an email, doc chosen by search). Benchmarks are attack-heavy; without these you cannot test the "fewer unnecessary confirmations" hypothesis.
-- [ ] Pilot: 2 annotators × ~100 records → Cohen's κ; revise guidelines before scaling.
+- [~] **Add benign-but-ambiguous cases** (20 drafted minimal pairs in `data/processed/annotations/benign_ambiguous_v0.jsonl` via `scripts/make_benign_ambiguous.py`; labels are Claude drafts, need human review; scale up after the pilot) (recipient legitimately taken from an email, doc chosen by search). Benchmarks are attack-heavy; without these you cannot test the "fewer unnecessary confirmations" hypothesis.
+- [~] Pilot: 2 annotators × ~100 records → Cohen's κ; revise guidelines before scaling. (Blinded sheets + κ script ready in `data/processed/annotations/pilot_v1`; waiting on annotators.)
 - [ ] Group-wise split by `group_id` (task + all its attack variants together). Hold out ≥1 attack family and ≥1 tool for generalisation tests.
 - [ ] Double-annotate the test set; log disagreements.
 

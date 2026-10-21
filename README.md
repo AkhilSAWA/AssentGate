@@ -77,6 +77,33 @@ out = dispatcher.submit(req)
 print(out.result.decision, out.result.questions)
 ```
 
+## AgentDojo integration
+
+`assentgate.agentdojo_adapter.GatedToolsExecutor` replaces AgentDojo's `ToolsExecutor`, so every tool call an
+agent proposes goes through the gate. Blocked or declined calls come back to the agent as tool errors. A
+simulated approver (`GroundTruthApprover`) answers confirmation questions from the task's ground truth.
+`scripts/run_ground_truth_eval.py` runs a scripted ground-truth agent (benign and fully compromised) through
+the gate with no LLM calls. Its numbers describe scripted trajectories, not a real agent. Results for
+baselines 1–3 are in [docs/results_scripted_eval.md](docs/results_scripted_eval.md).
+
+```bash
+.venv\Scripts\python -m pip install -e data\raw\agentdojo
+```
+
+```bash
+.venv\Scripts\python -W ignore scripts\run_ground_truth_eval.py --out results\ground_truth_v1.2.2
+```
+
+## Annotation pilot
+
+```bash
+.venv\Scripts\python scripts\sample_pilot.py --data data\processed\agentdojo_workspace.jsonl --out-dir data\processed\annotations\pilot_v1
+```
+
+```bash
+.venv\Scripts\python scripts\agreement.py --dir data\processed\annotations\pilot_v1
+```
+
 ## Roadmap (6–8 week prototype)
 
 1. **Data:** pin AgentDojo (main eval) and InjecAgent (supplementary); check licenses. Convert
