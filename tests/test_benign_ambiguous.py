@@ -33,6 +33,13 @@ def test_each_scenario_stays_in_one_split():
     assert all(len(s) == 1 for s in splits.values())
 
 
+def test_guidelines_v02_send_share_invite_delete_are_never_safely_derived():
+    never = {"send_email", "share_file", "add_calendar_event_participants", "delete_file", "delete_email"}
+    for r in builder.records():
+        if r["tool"] in never:
+            assert r["label"] != "safely_derived", r["record_id"]
+
+
 def test_every_scenario_has_a_delegated_variant_needing_no_prompt():
     for scenario, variants in builder.SCENARIOS.items():
         delegated = [v for v in variants if v[0] == "delegated"]

@@ -9,7 +9,7 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [~] Clone and **pin** AgentDojo (builder tested on commit 089ed468) (and InjecAgent) to a specific commit/release; record versions in `docs/data_sources.md`. (AgentDojo pinned + recorded; InjecAgent not cloned yet.)
 - [~] Read each repo's LICENSE and record it before redistributing any derived data. (AgentDojo MIT read; InjecAgent MIT per repo page only.)
 - [ ] Literature review: read the 5 core papers properly + search for newer argument-level / confirmation work. Write `docs/related_work.md` and a one-paragraph *narrow* novelty claim.
-- [ ] Freeze the annotation guidelines draft (`docs/annotation_guidelines.md`).
+- [x] Freeze the annotation guidelines draft (`docs/annotation_guidelines.md`). (v0.2 frozen 2026-10-22 for pilot_v1; quick reference in the pilot folder.)
 
 ## Phase 1 — AgentDojo integration + cheap baselines (weeks 1–2)
 - [x] Map AgentDojo's **workspace** suite tools (email / calendar / cloud drive) to `src/assentgate/workspace.py` (use AgentDojo's tool names/args).
@@ -23,15 +23,15 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [x] `scripts/build_agentdojo_dataset.py`: AgentDojo saved runs → JSONL with rule labels (see `docs/dataset_and_training.md`).
 - [ ] Manually review `needs_review` side-effecting records (`reviewed_label`).
 - [~] **Add benign-but-ambiguous cases** (20 drafted minimal pairs in `data/processed/annotations/benign_ambiguous_v0.jsonl` via `scripts/make_benign_ambiguous.py`; labels are Claude drafts, need human review; scale up after the pilot) (recipient legitimately taken from an email, doc chosen by search). Benchmarks are attack-heavy; without these you cannot test the "fewer unnecessary confirmations" hypothesis.
-- [~] Pilot: 2 annotators × ~100 records → Cohen's κ; revise guidelines before scaling. (Blinded sheets + κ script ready in `data/processed/annotations/pilot_v1`; waiting on annotators.)
+- [~] Pilot: 2 annotators × ~100 records → Cohen's κ; revise guidelines before scaling. (Blinded sheets with a `context` column + quick reference + κ script ready in `data/processed/annotations/pilot_v1`; waiting on annotators.)
 - [ ] Group-wise split by `group_id` (task + all its attack variants together). Hold out ≥1 attack family and ≥1 tool for generalisation tests.
 - [ ] Double-annotate the test set; log disagreements.
 
 ## Phase 3 — Models (weeks 4–5)
 - [x] `scripts/train_classifier.py` written (not yet run).
-- [ ] Baseline 4a: sentence embeddings + logistic regression.
+- [~] Baseline 4a: sentence embeddings + logistic regression. (Trained on rule_v1 weak labels only, single split + 5×5 group-wise CV → `docs/results_lr_baseline.md`; retrain once human labels exist.)
 - [ ] ⚠ Main: DeBERTa-v3-small, 4-class (+ per-field head or per-field records, see ROADMAP §Improvements).
-- [ ] Ablation (baseline 4): same model without evidence/history in the input.
+- [~] Ablation (baseline 4): same model without evidence/history in the input. (LR version run on weak labels; inconclusive.)
 - [ ] Calibrate (temperature scaling) and choose thresholds on validation only.
 - [ ] Implement as a `Classifier` so it drops into `AssentGate(..., classifier=...)`.
 

@@ -27,8 +27,8 @@ Read these before substantive work:
   questions, gate (policy → classifier → approvals), dispatcher (controlled execution, provenance, history + audit),
   provenance (value tagging), audit (SQLite), workspace (AgentDojo tool specs + FakeWorkspace),
   annotation (Cohen's κ), agentdojo_adapter (`GatedToolsExecutor`, `GroundTruthApprover`, `GroundTruthProposer`; needs `.[eval]`).
-- `tests/` — test_gate (25), test_annotation (6), test_benign_ambiguous (3), test_agentdojo_adapter (5, skipped
-  without AgentDojo; slow). 39 pass 2026-10-21.
+- `tests/` — test_gate (25), test_annotation (6), test_benign_ambiguous (3), test_train_cv (4),
+  test_agentdojo_adapter (5, skipped without AgentDojo; slow). 43 pass 2026-10-22.
 - `scripts/build_agentdojo_dataset.py` — AgentDojo saved runs → weakly-labelled JSONL (`rule_v1`, `needs_review`, group-hash split).
 - `scripts/sample_pilot.py` / `scripts/agreement.py` — blinded annotation pilot sheets / κ + disagreement log.
 - `scripts/run_ground_truth_eval.py` — no-LLM end-to-end run (scripted ground-truth agent, benign + compromised) → `results/`;
@@ -48,6 +48,7 @@ git clone https://github.com/ethz-spylab/agentdojo data\raw\agentdojo && git -C 
 .venv\Scripts\python scripts\sample_pilot.py --data data\processed\agentdojo_workspace.jsonl --out-dir data\processed\annotations\pilot_v1
 .venv\Scripts\python scripts\agreement.py --dir data\processed\annotations\pilot_v1
 .venv\Scripts\python -W ignore scripts\run_ground_truth_eval.py --out results\ground_truth_v1.2.2   # ~30 min CPU
+.venv\Scripts\python scripts\train_classifier.py --data data\processed\agentdojo_workspace.jsonl --model lr --include-unreviewed --side-effects-only --cv 5 --cv-repeats 5   # ask before training
 ```
 
 ## Current status (2026-10-21)
@@ -75,8 +76,22 @@ the counts above exactly; pilot sheets generated (100 records, 37 groups, seed 0
 approver; `ToolLevelRules` = baseline 2 (confirm send/share/delete tools only); scripted ground-truth eval of
 baselines 1–3 → `docs/results_scripted_eval.md` (scripted agent, NOT an LLM; attack metrics only over the 227/560
 feasible pairs because v1.2 injection tasks 6–13 have empty ground truth); 20 draft benign-ambiguous records
-(`scripts/make_benign_ambiguous.py`, labels need human review). Open question: label for delegated external
-side effects ("reply to whoever sent X") — guidelines don't cover it.
+(`scripts/make_benign_ambiguous.py`, labels need human review).
+Annotation guidelines v0.2 (owner-approved, FROZEN for pilot_v1 2026-10-22; don't edit until κ is in, then v0.3).
+Pilot sheets were regenerated (same 100 records, seed 0) with a `context` column of prior tool outputs from the run
+files, needed for tests C/D; `pilot_v1/QUICK_REFERENCE.md` is the annotators' one-pager. *Delegation by reference*
+tests A–D (named source, selection rule, exact match, data not instructions). `authorized` vs `safely_derived` is
+now "who chose the action" (user-requested → authorized; agent-chosen read/lookup → safely_derived), and
+send/share/invite/delete are never safely_derived. rule_v1 still uses the old boundary; reviewers override it.
+
+Done 2026-10-22 (user approved): ml extra installed (torch 2.14.1+cpu); LR baseline trained on rule_v1 WEAK labels
+(`--include-unreviewed`), 3 runs → `docs/results_lr_baseline.md`. Unsafe-allow 0.53–0.62, val/test macro-F1 differ
+by ~0.3 (only 54 groups → noisy single split), evidence didn't help (rule labels use oracle injection text the
+model can't see). Not a result about AssentGate; the human labels are the bottleneck.
+`train_classifier.py` now tags weak-label runs `-weaklabels` and writes config + label counts into metrics.json.
+Added `--cv K --cv-repeats R` (LR only): repeated group-wise CV on train+val, test untouched. 5×5 CV shows
+macro-F1 std ~0.13–0.17 across folds (range ~0.1–0.8) → single-split numbers are noise; compare configs with
+paired folds. Paired: evidence slightly worse than no-evidence on weak labels (−0.03 F1, better in 6/25 folds).
 
 Next: humans fill the pilot sheets → κ → revise guidelines → review side-effecting records (`reviewed_label`) →
 review + scale up the benign-ambiguous set → LR baseline (CPU, ask first) → DeBERTa-v3-small (GPU, needs sign-off) →

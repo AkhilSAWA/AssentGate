@@ -25,9 +25,39 @@ from pathlib import Path
 READ_ONLY_PREFIXES = ("get_", "search_", "list_")
 LABELS = ("authorized", "safely_derived", "confirmation_required", "blocked")
 SHEET_COLUMNS = [
-    "record_id", "user_request", "tool", "args", "evidence", "recent_tools",
+    "record_id", "user_request", "tool", "args", "evidence", "recent_tools", "context",
     "label", "unresolved_fields", "prohibited_fields", "notes",
 ]
+HISTORY_LEN = 5              # matches scripts/build_agentdojo_dataset.py
+CONTEXT_OUTPUTS = 4          # most recent tool outputs shown per record
+CONTEXT_CHARS_PER_OUTPUT = 1500
+
+
+def call_context(runs_dir: Path, r: dict) -> str:
+    """Tool outputs the agent had seen before proposing this call, read from the AgentDojo run file.
+
+    Only messages are used; the run's `injections` metadata (which would reveal the answer) is not shown.
+    """
+    run = json.loads((runs_dir / r["source_file"]).read_text(encoding="utf-8"))
+    want_history = [h["tool"] for h in r["history"]]
+    outputs, calls_so_far = [], []
+    for m in run.get("messages") or []:
+        if m.get("role") == "tool":
+            c = m.get("content")
+            text = c if isinstance(c, str) else " ".join(
+                b.get("content", "") if isinstance(b, dict) else str(b) for b in (c or []))
+            name = (m.get("tool_call") or {}).get("function", "tool")
+            if len(text) > CONTEXT_CHARS_PER_OUTPUT:
+                text = text[:CONTEXT_CHARS_PER_OUTPUT] + " …[truncated]"
+            outputs.append(f"[{name} output]\n{text}")
+        elif m.get("role") == "assistant":
+            for tc in m.get("tool_calls") or []:
+                # The builder stores the last HISTORY_LEN prior calls, so match on those.
+                if (tc.get("function") == r["tool"] and (tc.get("args") or {}) == r["args"]
+                        and calls_so_far[-HISTORY_LEN:] == want_history):
+                    return "\n\n".join(outputs[-CONTEXT_OUTPUTS:]) or "(no tool output yet)"
+                calls_so_far.append(tc.get("function"))
+    return "(call not found in run file)"
 
 
 def load_candidates(path: Path) -> list[dict]:
@@ -61,7 +91,7 @@ def sample(records: list[dict], n: int, seed: int) -> list[dict]:
     return picked
 
 
-def sheet_row(r: dict) -> dict:
+def sheet_row(r: dict, context: str) -> dict:
     return {
         "record_id": r["record_id"],
         "user_request": r["user_request"],
@@ -69,6 +99,7 @@ def sheet_row(r: dict) -> dict:
         "args": json.dumps(r["args"], ensure_ascii=False),
         "evidence": json.dumps(r["evidence"]),
         "recent_tools": " > ".join(h["tool"] for h in r["history"]),
+        "context": context,
         "label": "", "unresolved_fields": "", "prohibited_fields": "", "notes": "",
     }
 
@@ -79,16 +110,22 @@ def main():
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--runs", type=Path, default=Path("data/raw/agentdojo/runs"),
+                    help="AgentDojo runs dir (pinned commit) to read tool outputs for the context column")
     a = ap.parse_args()
 
     picked = sample(load_candidates(a.data), a.n, a.seed)
+    contexts = {r["record_id"]: call_context(a.runs, r) for r in picked}
+    missing = [i for i, c in contexts.items() if c.startswith("(call not found")]
+    if missing:
+        raise SystemExit(f"Could not locate {len(missing)} calls in their run files, e.g. {missing[:3]}")
     a.out_dir.mkdir(parents=True, exist_ok=True)
     for name in ("annotator_A.csv", "annotator_B.csv"):
         # utf-8-sig so Excel opens non-ASCII text correctly.
         with (a.out_dir / name).open("w", encoding="utf-8-sig", newline="") as f:
             w = csv.DictWriter(f, fieldnames=SHEET_COLUMNS)
             w.writeheader()
-            w.writerows(sheet_row(r) for r in picked)
+            w.writerows(sheet_row(r, contexts[r["record_id"]]) for r in picked)
     with (a.out_dir / "pilot_key.jsonl").open("w", encoding="utf-8") as f:
         for r in picked:
             key = {k: r[k] for k in ("record_id", "group_id", "tool", "label", "needs_review",

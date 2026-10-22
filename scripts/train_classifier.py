@@ -55,7 +55,7 @@ def load(path: Path, include_unreviewed: bool, side_effects_only: bool = False):
     return out
 
 
-def report(name: str, y_true, y_pred) -> dict:
+def report(name: str, y_true, y_pred, verbose: bool = True) -> dict:
     from sklearn.metrics import classification_report, f1_score
 
     n = len(y_true)
@@ -69,10 +69,75 @@ def report(name: str, y_true, y_pred) -> dict:
         "unnecessary_confirmation_rate": unnecessary / max(1, sum(t in ALLOW for t in y_true)),
         "n": n,
     }
-    print(f"\n== {name} ==")
-    print(classification_report(y_true, y_pred, labels=range(4), target_names=LABELS, zero_division=0))
-    print({k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()})
+    for i, label in enumerate(LABELS):
+        support = sum(t == i for t in y_true)
+        if support:  # recall is undefined for a class absent from this split
+            m[f"recall_{label}"] = sum(t == i and p == i for t, p in zip(y_true, y_pred)) / support
+    if verbose:
+        print(f"\n== {name} ==")
+        print(classification_report(y_true, y_pred, labels=range(4), target_names=LABELS, zero_division=0))
+        print({k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()})
     return m
+
+
+def group_folds(groups: list[str], k: int, seed: int) -> list[int]:
+    """Fold index per record; every record of a group lands in the same fold."""
+    import random
+
+    unique = sorted(set(groups))
+    random.Random(seed).shuffle(unique)
+    fold_of = {g: i % k for i, g in enumerate(unique)}
+    return [fold_of[g] for g in groups]
+
+
+def summarise_folds(fold_metrics: list[dict]) -> dict:
+    import statistics
+
+    keys = sorted({k for m in fold_metrics for k in m if k != "n"})
+    out = {}
+    for k in keys:
+        vals = [m[k] for m in fold_metrics if k in m]
+        out[k] = {"mean": statistics.fmean(vals), "std": statistics.pstdev(vals),
+                  "min": min(vals), "max": max(vals), "folds": len(vals)}
+    return out
+
+
+def encode(rows, use_evidence):
+    from sentence_transformers import SentenceTransformer
+
+    enc = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return enc.encode([to_text(r, use_evidence) for r in rows], batch_size=64, show_progress_bar=False)
+
+
+def cv_lr(data, use_evidence, out_dir: Path, k: int, repeats: int, seed: int):
+    """Repeated group-wise k-fold CV on train+val. The test split is never touched."""
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+
+    rows = data["train"] + data["val"]
+    X = encode(rows, use_evidence)
+    y = np.array([r["y"] for r in rows])
+    groups = [r["group_id"] for r in rows]
+    fold_metrics = []
+    for rep in range(repeats):
+        folds = np.array(group_folds(groups, k, seed + rep))
+        for f in range(k):
+            held = folds == f
+            clf = LogisticRegression(max_iter=2000, class_weight="balanced").fit(X[~held], y[~held])
+            m = report(f"cv r{rep} f{f}", y[held].tolist(), clf.predict(X[held]).tolist(), verbose=False)
+            m.update(repeat=rep, fold=f, groups=len({g for g, h in zip(groups, held) if h}))
+            fold_metrics.append(m)
+            print(f"repeat {rep} fold {f}: n={m['n']} groups={m['groups']} macro_f1={m['macro_f1']:.3f} "
+                  f"unsafe_allow={m['unsafe_allow_rate']:.3f}")
+    summary = summarise_folds([{k2: v for k2, v in m.items() if k2 not in ("repeat", "fold", "groups")}
+                               for m in fold_metrics])
+    print("\n== CV summary (mean ± std over folds) ==")
+    for name, s in summary.items():
+        print(f"  {name:38s} {s['mean']:.3f} ± {s['std']:.3f}  [{s['min']:.3f}, {s['max']:.3f}]  folds={s['folds']}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return {"cv": {"k": k, "repeats": repeats, "seed": seed, "pooled_splits": ["train", "val"],
+                   "groups": len(set(groups)), "records": len(rows)},
+            "summary": summary, "folds": fold_metrics}
 
 
 def train_lr(data, use_evidence, out_dir: Path):
@@ -162,7 +227,13 @@ def main():
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--lr", type=float, default=3e-5)
+    ap.add_argument("--cv", type=int, default=0,
+                    help="K>1: repeated group-wise K-fold CV on train+val instead of one split (lr only)")
+    ap.add_argument("--cv-repeats", type=int, default=5)
+    ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    if a.cv and a.model != "lr":
+        ap.error("--cv is only implemented for --model lr")
 
     data = load(a.data, a.include_unreviewed, a.side_effects_only)
     for s, rows in data.items():
@@ -172,10 +243,14 @@ def main():
         print(f"WARNING: no training examples for {missing}. Review records (set reviewed_label) "
               "or pass --include-unreviewed.")
     tag = (a.model + ("-noevidence" if a.no_evidence else "") + ("-sideeffects" if a.side_effects_only else "")
-           + ("-weaklabels" if a.include_unreviewed else ""))
+           + ("-weaklabels" if a.include_unreviewed else "") + (f"-cv{a.cv}x{a.cv_repeats}" if a.cv else ""))
     out = a.out / tag
-    res = (train_lr(data, not a.no_evidence, out) if a.model == "lr"
-           else train_deberta(data, not a.no_evidence, out, a.epochs, a.batch_size, a.lr))
+    if a.cv:
+        res = cv_lr(data, not a.no_evidence, out, a.cv, a.cv_repeats, a.seed)
+    elif a.model == "lr":
+        res = train_lr(data, not a.no_evidence, out)
+    else:
+        res = train_deberta(data, not a.no_evidence, out, a.epochs, a.batch_size, a.lr)
     out.mkdir(parents=True, exist_ok=True)
     res["config"] = {k: str(v) for k, v in vars(a).items()}
     res["label_counts"] = {s: dict(Counter(LABELS[r["y"]] for r in rows)) for s, rows in data.items()}

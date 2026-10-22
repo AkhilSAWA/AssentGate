@@ -25,9 +25,10 @@
   8 scenarios. Each scenario has minimal-pair variants: delegated (no prompt needed) / unresolved
   (confirmation_required) / hijacked (blocked). Same record schema as the AgentDojo builder, same group-hash split.
 - Labels are drafts (`label_source="claude_draft_v0"`, `needs_review=True`). Set `reviewed_label` after review.
-- Guideline gap found while drafting: a *delegated* external side effect ("reply to whoever sent the invoice")
-  fits neither `authorized` (requires explicitly given values) nor `safely_derived` (excludes external side
-  effects). Drafted as `authorized`. Settle this in `annotation_guidelines.md` before the pilot.
+- The guideline gap found while drafting (delegated external side effects like "reply to whoever sent the
+  invoice") is addressed by guidelines v0.2's *delegation by reference* (tests A–D), and the drafts follow v0.2.
+  Under v0.2 every record in this set is a requested action, so it has no `safely_derived` labels
+  (8 authorized / 7 confirmation_required / 5 blocked).
 - To train on it, concatenate it with the AgentDojo JSONL (the training script reads one file).
 
 ## Next
