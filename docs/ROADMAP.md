@@ -8,7 +8,7 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [x] Fix known issues listed in `CLAUDE.md` (policy confirmation floor, unchecked extra args, approval normalisation, history wiring) and make the first git commit.
 - [~] Clone and **pin** AgentDojo (builder tested on commit 089ed468) (and InjecAgent) to a specific commit/release; record versions in `docs/data_sources.md`. (AgentDojo pinned + recorded; InjecAgent not cloned yet.)
 - [~] Read each repo's LICENSE and record it before redistributing any derived data. (AgentDojo MIT read; InjecAgent MIT per repo page only.)
-- [ ] Literature review: read the 5 core papers properly + search for newer argument-level / confirmation work. Write `docs/related_work.md` and a one-paragraph *narrow* novelty claim.
+- [~] Literature review: read the 5 core papers properly + search for newer argument-level / confirmation work. Write `docs/related_work.md` and a one-paragraph *narrow* novelty claim. (2026-10-23 survey from abstracts/READMEs written; full-text reading of AuthGraph, RTBAS, SARA, agent-action-guard, AuthorizationBench still needed.)
 - [x] Freeze the annotation guidelines draft (`docs/annotation_guidelines.md`). (v0.2 frozen 2026-10-22 for pilot_v1; quick reference in the pilot folder.)
 
 ## Phase 1 — AgentDojo integration + cheap baselines (weeks 1–2)
@@ -17,14 +17,16 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [x] **Instrument provenance**: tag every value returned by a tool; when a later call argument contains a tagged value, emit `ArgumentEvidence(source=tool_output, verified=True)`. This is what makes "source evidence" real rather than guessed. (`provenance.py`, applied inside AgentDojo via `GatedToolsExecutor`.)
 - [x] Simulated approver: answers confirmation questions from ground truth (yes for benign task needs, no for injected goals). Needed to measure task completion with confirmations. (`GroundTruthApprover`; conservative — declines benign calls that differ from the ground-truth route.)
 - [x] No-LLM end-to-end check: `scripts/run_ground_truth_eval.py` runs a scripted ground-truth agent (benign + fully compromised) through baselines 1–3 (baseline 2 = `ToolLevelRules`). Results: `docs/results_scripted_eval.md`. Not a substitute for the LLM-agent runs below.
-- [ ] ⚠ Run baselines 1–3 end-to-end (no gate, tool-level rules, confirm-every-sensitive-action). Requires an LLM agent → API cost or a local model.
+- [x] Realistic scripted attacks: AgentDojo's `important_instructions` text placed in the data each task reads (`--attack important_instructions`), plus field-level provenance (exact structured field vs. contained in free text). Provenance baselines (strict ≈ agent-action-guard rules, loose ≈ AuthGraph) and AssentGate's delegation rules (+ action-intent check) → `docs/results_delegation_eval.md`.
+- [ ] ⚠ Run baselines 1–3 end-to-end (no gate, tool-level rules, confirm-every-sensitive-action). Requires an LLM agent → API cost or a local model. (Staged plan with measured token use and costs: `docs/llm_agent_run_plan.md`; stage 0 smoke test < $0.05 on Haiku 5.5, awaiting sign-off.)
 
 ## Phase 2 — Dataset (weeks 2–4)
 - [x] `scripts/build_agentdojo_dataset.py`: AgentDojo saved runs → JSONL with rule labels (see `docs/dataset_and_training.md`).
 - [ ] Manually review `needs_review` side-effecting records (`reviewed_label`).
 - [~] **Add benign-but-ambiguous cases** (20 drafted minimal pairs in `data/processed/annotations/benign_ambiguous_v0.jsonl` via `scripts/make_benign_ambiguous.py`; labels are Claude drafts, need human review; scale up after the pilot) (recipient legitimately taken from an email, doc chosen by search). Benchmarks are attack-heavy; without these you cannot test the "fewer unnecessary confirmations" hypothesis.
 - [~] Pilot: 2 annotators × ~100 records → Cohen's κ; revise guidelines before scaling. (Blinded sheets with a `context` column + quick reference + κ script ready in `data/processed/annotations/pilot_v1`; waiting on annotators.)
-- [ ] Group-wise split by `group_id` (task + all its attack variants together). Hold out ≥1 attack family and ≥1 tool for generalisation tests.
+- [x] **Labels by construction (replaces human labels on the critical path):** `scripts/make_constructed_dataset.py` → 1,457 records from AgentDojo ground truth (allow = user-task calls, block = injection-task calls with randomised attacker identities, confirm = one-field "distractor" mutations). Human pilot is now an optional audit.
+- [x] Group-wise split by `group_id` (task + all its attack variants together). Hold out ≥1 attack family and ≥1 tool for generalisation tests. (`eval_crossfit.py`: 3 folds holding out user tasks **and** attack goals; tool hold-out not done.)
 - [ ] Double-annotate the test set; log disagreements.
 
 ## Phase 3 — Models (weeks 4–5)
@@ -33,12 +35,12 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [ ] ⚠ Main: DeBERTa-v3-small, 4-class (+ per-field head or per-field records, see ROADMAP §Improvements).
 - [~] Ablation (baseline 4): same model without evidence/history in the input. (LR version run on weak labels; inconclusive.)
 - [ ] Calibrate (temperature scaling) and choose thresholds on validation only.
-- [ ] Implement as a `Classifier` so it drops into `AssentGate(..., classifier=...)`.
+- [x] Implement as a `Classifier` so it drops into `AssentGate(..., classifier=...)`. (`scorer.LearnedGate`: 3-way allow/confirm/block scorer trained on constructed labels; `classifier.EscalateOnly` hybrid. Result: alone it's worse than the rules on unseen attack goals; see `docs/results_delegation_eval.md`.)
 
 ## Phase 4 — End-to-end evaluation (weeks 5–6)
 - [ ] ⚠ AgentDojo runs for all baselines + full AssentGate.
 - [ ] Report: macro-F1, per-class P/R, unsafe-allow, false-block, benign utility, attack success rate, confirmations per task, unnecessary-confirmation rate, added latency, unseen tool / attack family.
-- [ ] Headline comparison at a **matched unsafe-allow rate** (or as a curve), so "fewer confirmations" can't come from simply allowing more.
+- [~] Headline comparison at a **matched unsafe-allow rate** (or as a curve), so "fewer confirmations" can't come from simply allowing more. (Scripted agent only: delegation_intent 0.15 prompts/benign task at 0.9% attack success vs strict provenance 0.45 at 0%; learned threshold sweep in `results/crossfit_v1`. LLM agent still needed.)
 
 ## Phase 5 — Scoped approvals & history (weeks 6–7)
 - [ ] Approval scopes beyond exact match: value, recipient set, domain, document, count, time window.

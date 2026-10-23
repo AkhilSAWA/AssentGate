@@ -26,14 +26,21 @@ Read these before substantive work:
   (`Classifier` protocol; `SensitivityBaseline` = baseline 3 "confirm every side effect", NOT a trained model),
   questions, gate (policy → classifier → approvals), dispatcher (controlled execution, provenance, history + audit),
   provenance (value tagging), audit (SQLite), workspace (AgentDojo tool specs + FakeWorkspace),
-  annotation (Cohen's κ), agentdojo_adapter (`GatedToolsExecutor`, `GroundTruthApprover`, `GroundTruthProposer`; needs `.[eval]`).
-- `tests/` — test_gate (25), test_annotation (6), test_benign_ambiguous (3), test_train_cv (4),
-  test_agentdojo_adapter (5, skipped without AgentDojo; slow). 43 pass 2026-10-22.
+  annotation (Cohen's κ), agentdojo_adapter (`GatedToolsExecutor`, `GroundTruthApprover`, `GroundTruthProposer`,
+  `ImportantInstructions` attack text, `run_scripted`; needs `.[eval]`), construct (labels by construction),
+  scorer (`featurize`, `LearnedGate`). Classifiers: `StrictProvenance`, `LooseProvenance`, `DelegationRules`,
+  `DelegationIntentRules`, `EscalateOnly`, `ToolLevelRules`, `SensitivityBaseline`.
+- `tests/` — test_gate, test_annotation, test_benign_ambiguous, test_train_cv, test_construct_scorer,
+  test_agentdojo_adapter (AgentDojo tests skip without it; slow).
 - `scripts/build_agentdojo_dataset.py` — AgentDojo saved runs → weakly-labelled JSONL (`rule_v1`, `needs_review`, group-hash split).
 - `scripts/sample_pilot.py` / `scripts/agreement.py` — blinded annotation pilot sheets / κ + disagreement log.
 - `scripts/run_ground_truth_eval.py` — no-LLM end-to-end run (scripted ground-truth agent, benign + compromised) → `results/`;
   `scripts/summarise_ground_truth_eval.py` → summary over feasible attacks.
 - `scripts/make_benign_ambiguous.py` — hand-written minimal-pair records (draft labels).
+- `scripts/make_constructed_dataset.py` — labels by construction from AgentDojo ground truth (main data now).
+- `scripts/eval_crossfit.py` — trains the learned scorer per fold (held-out user tasks + attack goals) and runs
+  offline + e2e comparison of all gates → `results/crossfit_v1`, `models/crossfit_v1`.
+- Results docs: `docs/results_delegation_eval.md` (headline), `docs/related_work.md` (prior work + novelty).
 - `scripts/train_classifier.py` — `--model lr|deberta`, `--no-evidence` ablation, `--side-effects-only`, `--include-unreviewed`.
 - `data/raw/`, `models/` and the regenerated `data/processed/agentdojo_*.jsonl` are gitignored; annotations are tracked.
 - `docs/data_sources.md` — pinned versions + licenses.
@@ -93,6 +100,18 @@ Added `--cv K --cv-repeats R` (LR only): repeated group-wise CV on train+val, te
 macro-F1 std ~0.13–0.17 across folds (range ~0.1–0.8) → single-split numbers are noise; compare configs with
 paired folds. Paired: evidence slightly worse than no-evidence on weak labels (−0.03 F1, better in 6/25 folds).
 
-Next: humans fill the pilot sheets → κ → revise guidelines → review side-effecting records (`reviewed_label`) →
+Done 2026-10-23 (pivot to labels by construction; user asked to build as much as possible):
+field-level provenance (exact field vs contained-in-text + record snippet); realistic scripted attacks
+(`--attack important_instructions`); provenance baselines; delegation rules (+ lexical action-intent check);
+constructed dataset (1,457 records); cross-fitted learned scorer + hybrid. Headline (scripted agent, 218 feasible
+attacks): delegation_intent 0.15 prompts/benign task @ 0.9% ASR vs strict provenance 0.45 @ 0%, loose 0.10 @ 84%.
+Learned scorer alone is worse (15–18% ASR on unseen attack goals); hybrid reaches 0% only at strict's prompt cost.
+Explicit delegation to content added (guidelines v0.3, `ProvenanceTracker.delegated_sources`,
+`AuthorizationRequest.delegated_sources`, kind `named_content`): delegation_intent now 0.10 prompts/benign task @ 0.9% ASR.
+Open issues: test C (semantic "is this the record the request picked?"), no LLM-agent run yet (plan + costs in
+`docs/llm_agent_run_plan.md`; AgentDojo's AnthropicLLM sends temperature=0.0 → 400 on current API, max_tokens=1024
+too small: fix before any paid run), no GPU for DeBERTa.
+
+Older plan (human pilot is now an optional audit): humans fill the pilot sheets → κ → revise guidelines → review side-effecting records (`reviewed_label`) →
 review + scale up the benign-ambiguous set → LR baseline (CPU, ask first) → DeBERTa-v3-small (GPU, needs sign-off) →
 wrap as `Classifier` → AgentDojo with an LLM agent (API cost or local model, needs sign-off).

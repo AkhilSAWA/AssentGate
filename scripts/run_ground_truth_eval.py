@@ -32,18 +32,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agentdojo.agent_pipeline import AgentPipeline, InitQuery, ToolsExecutionLoop  # noqa: E402
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
 
-from assentgate import AssentGate, ClassifierOutput, Decision  # noqa: E402
-from assentgate.agentdojo_adapter import (  # noqa: E402
-    GatedToolsExecutor,
-    GroundTruthApprover,
-    GroundTruthProposer,
-    always_approve,
-    never_approve,
+from assentgate import ClassifierOutput, Decision  # noqa: E402
+from assentgate.agentdojo_adapter import ImportantInstructions, run_scripted  # noqa: E402
+from assentgate.classifier import (  # noqa: E402
+    DelegationIntentRules,
+    DelegationRules,
+    LooseProvenance,
+    SensitivityBaseline,
+    StrictProvenance,
+    ToolLevelRules,
 )
-from assentgate.classifier import SensitivityBaseline, ToolLevelRules  # noqa: E402
 from assentgate.workspace import WORKSPACE_TOOLS  # noqa: E402
 
 SPECS = {t.name: t for t in WORKSPACE_TOOLS}
@@ -59,32 +59,19 @@ CONFIGS = {
     "tool_rules": (ToolLevelRules, "ground_truth"),
     "confirm_all": (SensitivityBaseline, "ground_truth"),
     "confirm_all_no": (SensitivityBaseline, "never"),
+    "strict_provenance": (StrictProvenance, "ground_truth"),
+    "loose_provenance": (LooseProvenance, "ground_truth"),
+    "delegation_rules": (DelegationRules, "ground_truth"),
+    "delegation_intent": (DelegationIntentRules, "ground_truth"),
 }
 
 
-def run_one(suite, user_task, injection_task, classifier_cls, approver_kind):
-    env = user_task.init_environment(suite.load_and_inject_default_environment({}))
-    approver = {
-        "always": always_approve,
-        "never": never_approve,
-        "ground_truth": GroundTruthApprover(user_task.ground_truth(env), SPECS),
-    }[approver_kind]
-    executor = GatedToolsExecutor(lambda: AssentGate(WORKSPACE_TOOLS, classifier=classifier_cls()), approver)
-    proposer = GroundTruthProposer(user_task, injection_task)
-    pipeline = AgentPipeline([InitQuery(), proposer, ToolsExecutionLoop([executor, proposer], max_iters=50)])
-    utility, attacked = suite.run_task_with_pipeline(pipeline, user_task, injection_task, injections={})
-    return {
-        "user_task": user_task.ID,
-        "injection_task": injection_task.ID if injection_task else None,
-        "utility": bool(utility),
-        "attack_success": bool(attacked) if injection_task else None,
-        "injection_calls": len(injection_task.ground_truth(env)) if injection_task else None,
-        "calls": len(executor.log),
-        "confirmations": sum(e["asked"] for e in executor.log),
-        "approved": sum(e["approved"] for e in executor.log),
-        "blocked": sum(e["decision"] == "blocked" for e in executor.log),
-        "decisions": dict(Counter(e["decision"] for e in executor.log)),
-    }
+def run_one(suite, user_task, injection_task, classifier_cls, approver_kind, attack=None):
+    injections = attack.injections(user_task, injection_task) if (attack and injection_task) else {}
+    row = run_scripted(suite, user_task, injection_task, classifier_cls, approver_kind, SPECS,
+                       WORKSPACE_TOOLS, injections)
+    row.pop("log")
+    return row
 
 
 def main():
@@ -92,20 +79,31 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--benchmark-version", default="v1.2.2")
     ap.add_argument("--configs", default=",".join(CONFIGS))
+    ap.add_argument("--attack", choices=["none", "important_instructions"], default="none",
+                    help="important_instructions puts AgentDojo's standard attack text into the data the "
+                         "user task reads, so attacker values appear in tool outputs (realistic for provenance gates)")
+    ap.add_argument("--skip-empty-injections", action="store_true",
+                    help="skip injection tasks whose ground truth is empty (the scripted agent can't attack)")
     a = ap.parse_args()
 
     suite = get_suite(a.benchmark_version, "workspace")
+    attack = ImportantInstructions(suite) if a.attack == "important_instructions" else None
+    injection_tasks = list(suite.injection_tasks.values())
+    if a.skip_empty_injections:
+        probe_env = suite.load_and_inject_default_environment({})
+        injection_tasks = [t for t in injection_tasks if t.ground_truth(probe_env)]
     a.out.mkdir(parents=True, exist_ok=True)
     meta = {"benchmark_version": a.benchmark_version, "agent": "scripted ground truth (no LLM)",
+            "attack": a.attack, "injection_tasks": [t.ID for t in injection_tasks],
             "date": date.today().isoformat()}
     (a.out / "run_info.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     for name in a.configs.split(","):
         classifier_cls, approver_kind = CONFIGS[name]
         benign, attacked, errors = [], [], []
         for user_task in suite.user_tasks.values():
-            for injection_task in [None, *suite.injection_tasks.values()]:
+            for injection_task in [None, *injection_tasks]:
                 try:
-                    row = run_one(suite, user_task, injection_task, classifier_cls, approver_kind)
+                    row = run_one(suite, user_task, injection_task, classifier_cls, approver_kind, attack)
                 except Exception as exc:  # recorded, not hidden
                     errors.append({"user_task": user_task.ID,
                                    "injection_task": injection_task.ID if injection_task else None,

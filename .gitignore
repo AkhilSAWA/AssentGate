@@ -10,6 +10,7 @@ dist/
 data/raw/
 data/interim/
 # Regenerated from the pinned AgentDojo commit (see docs/data_sources.md)
+# (also covers agentdojo_constructed_v1.jsonl from scripts/make_constructed_dataset.py)
 data/processed/agentdojo_*.jsonl
 models/
 *.sqlite

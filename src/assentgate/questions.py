@@ -24,6 +24,8 @@ def _display(value: object) -> str:
 
 
 def confirmation_questions(call: ToolCall, fields: list[str]) -> list[str]:
+    if not fields:  # the action itself, not a value, is in doubt
+        return [f"May the agent run '{call.tool}'? Your request doesn't appear to ask for this action."]
     questions = []
     for field in fields:
         value = _display(call.arguments.get(field))

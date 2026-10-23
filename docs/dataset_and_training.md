@@ -20,6 +20,17 @@
 - 5,540 records need review. **All confirmation_required labels are needs_review** → that class exists only after human review.
 - ~80% of records are reads; report metrics on side-effecting calls.
 
+## Labels by construction (v1, 2026-10-23): the main training/eval data now
+- `scripts/make_constructed_dataset.py` → `data/processed/agentdojo_constructed_v1.jsonl` (gitignored, ~1.5 min to
+  rebuild). 40 user tasks × (1 benign run + injection tasks 0–5 × 2 seeds under important_instructions text).
+- 1,457 side-effecting records: 364 allow (user-task ground-truth calls), 560 block (injection-task calls,
+  attacker addresses randomised), 533 confirm (one-field mutations: extra_seen 117, swap_seen 117,
+  swap_seen_id 117, swap_unseen 78, extra_unseen 52, permission_flip 26, swap_unseen_id 13, swap_attachment 13).
+- Each record stores the request exactly as the gate sees it (`Dispatcher.instrument`), so training and runtime
+  inputs are identical (`scorer.featurize`).
+- Limits: assumes ground truth = what the user authorised; no vague-request mutations; one benchmark suite;
+  only 28 distinct legitimate side-effect calls underneath, so records repeat across runs.
+
 ## Hand-written benign-ambiguous set (draft v0)
 - `scripts/make_benign_ambiguous.py` → `data/processed/annotations/benign_ambiguous_v0.jsonl`: 20 records,
   8 scenarios. Each scenario has minimal-pair variants: delegated (no prompt needed) / unresolved

@@ -36,17 +36,22 @@ class Dispatcher:
             raise ValueError(f"No ToolSpec registered with the gate for '{tool}'.")
         self.handlers[tool] = handler
 
-    def _instrument(self, request: AuthorizationRequest) -> AuthorizationRequest:
+    def instrument(self, request: AuthorizationRequest) -> AuthorizationRequest:
+        """The request exactly as the gate will see it: tagged evidence and the dispatcher's history."""
         # Only the dispatcher's own tagging may mark evidence verified, and its
         # own record of past calls replaces any caller-supplied history.
         supplied = [e.model_copy(update={"verified": False}) for e in request.evidence]
-        tagged = self.provenance.evidence_for(request.tool_call, request.user_request)
+        spec = self.gate.tools.get(request.tool_call.tool)
+        tagged = self.provenance.evidence_for(
+            request.tool_call, request.user_request, spec.sensitive_fields if spec else ()
+        )
         return request.model_copy(
-            update={"evidence": supplied + tagged, "history": self.history[-HISTORY_LEN:]}
+            update={"evidence": supplied + tagged, "history": self.history[-HISTORY_LEN:],
+                    "delegated_sources": self.provenance.delegated_sources(request.user_request)}
         )
 
     def submit(self, request: AuthorizationRequest) -> DispatchResult:
-        request = self._instrument(request)
+        request = self.instrument(request)
         call = request.tool_call
         result = self.gate.evaluate(request)
         executed, output, error = False, None, None

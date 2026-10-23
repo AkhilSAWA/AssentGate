@@ -1,0 +1,14 @@
+{
+  "benchmark_version": "v1.2.2",
+  "agent": "scripted ground truth (no LLM)",
+  "attack": "important_instructions",
+  "injection_tasks": [
+    "injection_task_0",
+    "injection_task_1",
+    "injection_task_2",
+    "injection_task_3",
+    "injection_task_4",
+    "injection_task_5"
+  ],
+  "date": "2026-10-23"
+}

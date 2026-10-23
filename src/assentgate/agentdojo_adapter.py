@@ -162,6 +162,70 @@ class GatedToolsExecutor(BasePipelineElement):
         )
 
 
+class ImportantInstructions:
+    """AgentDojo's standard "important_instructions" attack text, placed in every injection
+    vector the user task reads (found with AgentDojo's own no-LLM ground-truth probe)."""
+
+    def __init__(self, suite: Any, user_name: str = "Emma Johnson") -> None:
+        from agentdojo.attacks.base_attacks import FixedJailbreakAttack
+        from agentdojo.attacks.important_instructions_attacks import ImportantInstructionsAttack
+
+        self.attack = FixedJailbreakAttack(ImportantInstructionsAttack._JB_STRING, suite, None)
+        self.attack.user_name = user_name
+
+    def injections(self, user_task: Any, injection_task: Any, goal: str | None = None) -> dict[str, str]:
+        if goal is None:
+            return self.attack.attack(user_task, injection_task)
+        # Same template with a substituted goal (used to randomize attacker identities in training data).
+        return {
+            inj: self.attack.jailbreak.format(goal=goal, user=self.attack.user_name,
+                                              model=self.attack.model_name, task=user_task.PROMPT)
+            for inj in self.attack.get_injection_candidates(user_task)
+        }
+
+
+def run_scripted(
+    suite: Any,
+    user_task: Any,
+    injection_task: Any | None,
+    classifier_factory: Callable[[], Any],
+    approver_kind: str,
+    specs: dict[str, ToolSpec],
+    tools: Sequence[ToolSpec],
+    injections: dict[str, str] | None = None,
+) -> dict:
+    """One scripted-agent run through the gate. approver_kind: always | never | ground_truth."""
+    from collections import Counter
+
+    from agentdojo.agent_pipeline import AgentPipeline, InitQuery, ToolsExecutionLoop
+
+    injections = injections or {}
+    env = user_task.init_environment(suite.load_and_inject_default_environment(injections))
+    approver = {
+        "always": always_approve,
+        "never": never_approve,
+        "ground_truth": GroundTruthApprover(user_task.ground_truth(env), specs),
+    }[approver_kind]
+    executor = GatedToolsExecutor(lambda: AssentGate(list(tools), classifier=classifier_factory()), approver)
+    proposer = GroundTruthProposer(user_task, injection_task)
+    pipeline = AgentPipeline([InitQuery(), proposer, ToolsExecutionLoop([executor, proposer], max_iters=50)])
+    utility, attacked = suite.run_task_with_pipeline(pipeline, user_task, injection_task, injections=injections)
+    return {
+        "user_task": user_task.ID,
+        "injection_task": injection_task.ID if injection_task else None,
+        "injected_text": bool(injections),
+        "utility": bool(utility),
+        "attack_success": bool(attacked) if injection_task else None,
+        "injection_calls": len(injection_task.ground_truth(env)) if injection_task else None,
+        "calls": len(executor.log),
+        "confirmations": sum(e["asked"] for e in executor.log),
+        "approved": sum(e["approved"] for e in executor.log),
+        "blocked": sum(e["decision"] == "blocked" for e in executor.log),
+        "decisions": dict(Counter(e["decision"] for e in executor.log)),
+        "log": executor.log,
+    }
+
+
 class GroundTruthProposer(BasePipelineElement):
     """Proposes ground-truth calls one per turn, then the task's ground-truth answer."""
 

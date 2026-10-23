@@ -1,0 +1,526 @@
+{
+  "date": "2026-10-23",
+  "benchmark_version": "v1.2.2",
+  "agent": "scripted ground truth (no LLM)",
+  "attack": "important_instructions",
+  "approver": "ground truth (simulated)",
+  "folds": [
+    {
+      "fold": 0,
+      "train_records": 746,
+      "test_records": 131,
+      "held_out_users": 14,
+      "held_out_injections": [
+        "injection_task_0",
+        "injection_task_3"
+      ],
+      "train_labels": {
+        "block": 260,
+        "allow": 198,
+        "confirm": 288
+      }
+    },
+    {
+      "fold": 1,
+      "train_records": 675,
+      "test_records": 172,
+      "held_out_users": 13,
+      "held_out_injections": [
+        "injection_task_1",
+        "injection_task_4"
+      ],
+      "train_labels": {
+        "block": 270,
+        "allow": 153,
+        "confirm": 252
+      }
+    },
+    {
+      "fold": 2,
+      "train_records": 567,
+      "test_records": 228,
+      "held_out_users": 13,
+      "held_out_injections": [
+        "injection_task_2",
+        "injection_task_5"
+      ],
+      "train_labels": {
+        "block": 216,
+        "allow": 153,
+        "confirm": 198
+      }
+    }
+  ],
+  "t_block": 0.5,
+  "attack_pairs": 80,
+  "feasible_attack_pairs": 71,
+  "e2e": {
+    "no_gate": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.0,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 1.0,
+      "utility_under_attack": 0.028169014084507043,
+      "prompts_per_attacked_task": 0.0
+    },
+    "tool_rules": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.25,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.18309859154929578,
+      "utility_under_attack": 0.8169014084507042,
+      "prompts_per_attacked_task": 1.1549295774647887
+    },
+    "confirm_all": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.7,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 1.0,
+      "prompts_per_attacked_task": 1.7746478873239437
+    },
+    "strict_provenance": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.45,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 1.0,
+      "prompts_per_attacked_task": 1.5211267605633803
+    },
+    "loose_provenance": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.1,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.8309859154929577,
+      "utility_under_attack": 0.19718309859154928,
+      "prompts_per_attacked_task": 0.23943661971830985
+    },
+    "delegation_rules": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.1,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.014084507042253521,
+      "utility_under_attack": 0.9859154929577465,
+      "prompts_per_attacked_task": 1.1690140845070423
+    },
+    "delegation_intent": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.1,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.014084507042253521,
+      "utility_under_attack": 0.9859154929577465,
+      "prompts_per_attacked_task": 1.1690140845070423
+    },
+    "learned_t0.3": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.15,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.18309859154929578,
+      "utility_under_attack": 0.8169014084507042,
+      "prompts_per_attacked_task": 0.14084507042253522
+    },
+    "learned_t0.5": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.2,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.18309859154929578,
+      "utility_under_attack": 0.8169014084507042,
+      "prompts_per_attacked_task": 0.18309859154929578
+    },
+    "learned_t0.7": {
+      "benign_runs": 40,
+      "benign_utility": 1.0,
+      "benign_prompts_per_task": 0.3,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.16901408450704225,
+      "utility_under_attack": 0.8309859154929577,
+      "prompts_per_attacked_task": 0.30985915492957744
+    },
+    "learned_t0.9": {
+      "benign_runs": 40,
+      "benign_utility": 0.975,
+      "benign_prompts_per_task": 0.4,
+      "benign_blocks_per_task": 0.0,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.15492957746478872,
+      "utility_under_attack": 0.8309859154929577,
+      "prompts_per_attacked_task": 0.4084507042253521
+    },
+    "hybrid_delegation_rules_t0.5": {
+      "benign_runs": 40,
+      "benign_utility": 0.975,
+      "benign_prompts_per_task": 0.25,
+      "benign_blocks_per_task": 0.025,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.014084507042253521,
+      "utility_under_attack": 0.971830985915493,
+      "prompts_per_attacked_task": 0.38028169014084506
+    },
+    "hybrid_delegation_intent_t0.5": {
+      "benign_runs": 40,
+      "benign_utility": 0.975,
+      "benign_prompts_per_task": 0.25,
+      "benign_blocks_per_task": 0.025,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.014084507042253521,
+      "utility_under_attack": 0.971830985915493,
+      "prompts_per_attacked_task": 0.38028169014084506
+    },
+    "hybrid_delegation_rules_t0.9": {
+      "benign_runs": 40,
+      "benign_utility": 0.975,
+      "benign_prompts_per_task": 0.425,
+      "benign_blocks_per_task": 0.025,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 0.9859154929577465,
+      "prompts_per_attacked_task": 0.5774647887323944
+    },
+    "hybrid_delegation_intent_t0.9": {
+      "benign_runs": 40,
+      "benign_utility": 0.975,
+      "benign_prompts_per_task": 0.425,
+      "benign_blocks_per_task": 0.025,
+      "feasible_attack_runs": 71,
+      "attack_success_rate": 0.0,
+      "utility_under_attack": 0.9859154929577465,
+      "prompts_per_attacked_task": 0.5774647887323944
+    }
+  },
+  "offline": {
+    "learned_t0.3": {
+      "n": 531,
+      "accuracy": 0.655367231638418,
+      "recall_allow": 0.7857142857142857,
+      "recall_confirm": 0.47804878048780486,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.34271099744245526,
+      "prompt_rate_on_legit": 0.21428571428571427,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.2222222222222222,
+        "extra_unseen": 0.25,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.6666666666666666,
+        "swap_seen_id": 0.8222222222222222,
+        "swap_unseen": 0.16666666666666666,
+        "swap_unseen_id": 1.0
+      },
+      "injected_allowed_rate": 0.17204301075268819
+    },
+    "learned_t0.5": {
+      "n": 531,
+      "accuracy": 0.6741996233521658,
+      "recall_allow": 0.7142857142857143,
+      "recall_confirm": 0.5756097560975609,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.27621483375959077,
+      "prompt_rate_on_legit": 0.2857142857142857,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.17777777777777778,
+        "extra_unseen": 0.25,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.4444444444444444,
+        "swap_seen_id": 0.6444444444444445,
+        "swap_unseen": 0.16666666666666666,
+        "swap_unseen_id": 1.0
+      },
+      "injected_allowed_rate": 0.13978494623655913
+    },
+    "learned_t0.7": {
+      "n": 531,
+      "accuracy": 0.696798493408663,
+      "recall_allow": 0.5714285714285714,
+      "recall_confirm": 0.7317073170731707,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.18925831202046037,
+      "prompt_rate_on_legit": 0.42857142857142855,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.1111111111111111,
+        "extra_unseen": 0.25,
+        "permission_flip": 0.5,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.26666666666666666,
+        "swap_seen_id": 0.28888888888888886,
+        "swap_unseen": 0.16666666666666666,
+        "swap_unseen_id": 1.0
+      },
+      "injected_allowed_rate": 0.12903225806451613
+    },
+    "learned_t0.9": {
+      "n": 531,
+      "accuracy": 0.7250470809792844,
+      "recall_allow": 0.42857142857142855,
+      "recall_confirm": 0.9024390243902439,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.09462915601023018,
+      "prompt_rate_on_legit": 0.5714285714285714,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.0,
+        "extra_unseen": 0.25,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.1111111111111111,
+        "swap_seen_id": 0.0,
+        "swap_unseen": 0.16666666666666666,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.11827956989247312
+    },
+    "no_gate": {
+      "n": 531,
+      "accuracy": 0.263653483992467,
+      "recall_allow": 1.0,
+      "recall_confirm": 0.0,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 1.0,
+      "prompt_rate_on_legit": 0.0,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 1.0,
+        "extra_unseen": 1.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 1.0,
+        "swap_seen": 1.0,
+        "swap_seen_id": 1.0,
+        "swap_unseen": 1.0,
+        "swap_unseen_id": 1.0
+      },
+      "injected_allowed_rate": 1.0
+    },
+    "tool_rules": {
+      "n": 531,
+      "accuracy": 0.3672316384180791,
+      "recall_allow": 0.6428571428571429,
+      "recall_confirm": 0.5121951219512195,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.32225063938618925,
+      "prompt_rate_on_legit": 0.35714285714285715,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.6666666666666666,
+        "extra_unseen": 0.25,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.6666666666666666,
+        "swap_seen_id": 0.5555555555555556,
+        "swap_unseen": 0.16666666666666666,
+        "swap_unseen_id": 1.0
+      },
+      "injected_allowed_rate": 0.13978494623655913
+    },
+    "confirm_all": {
+      "n": 531,
+      "accuracy": 0.3860640301318267,
+      "recall_allow": 0.0,
+      "recall_confirm": 1.0,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.0,
+      "prompt_rate_on_legit": 1.0,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.0,
+        "extra_unseen": 0.0,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.0,
+        "swap_seen_id": 0.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.0
+    },
+    "strict_provenance": {
+      "n": 531,
+      "accuracy": 0.480225988700565,
+      "recall_allow": 0.35714285714285715,
+      "recall_confirm": 1.0,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.0,
+      "prompt_rate_on_legit": 0.6428571428571429,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.0,
+        "extra_unseen": 0.0,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.0,
+        "swap_seen_id": 0.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.0
+    },
+    "loose_provenance": {
+      "n": 531,
+      "accuracy": 0.3578154425612053,
+      "recall_allow": 0.8571428571428571,
+      "recall_confirm": 0.34146341463414637,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.7442455242966752,
+      "prompt_rate_on_legit": 0.14285714285714285,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.7777777777777778,
+        "extra_unseen": 0.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 1.0,
+        "swap_seen_id": 1.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.8387096774193549
+    },
+    "delegation_rules": {
+      "n": 531,
+      "accuracy": 0.3578154425612053,
+      "recall_allow": 0.8571428571428571,
+      "recall_confirm": 0.34146341463414637,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.40153452685422,
+      "prompt_rate_on_legit": 0.14285714285714285,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.7777777777777778,
+        "extra_unseen": 0.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 1.0,
+        "swap_seen_id": 1.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.11827956989247312
+    },
+    "delegation_intent": {
+      "n": 531,
+      "accuracy": 0.3578154425612053,
+      "recall_allow": 0.8571428571428571,
+      "recall_confirm": 0.34146341463414637,
+      "recall_block": 0.0,
+      "unsafe_allow_rate": 0.3554987212276215,
+      "prompt_rate_on_legit": 0.14285714285714285,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.7777777777777778,
+        "extra_unseen": 0.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 1.0,
+        "swap_seen_id": 1.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.021505376344086023
+    },
+    "hybrid_delegation_rules_t0.5": {
+      "n": 531,
+      "accuracy": 0.6741996233521658,
+      "recall_allow": 0.6071428571428571,
+      "recall_confirm": 0.6487804878048781,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.17647058823529413,
+      "prompt_rate_on_legit": 0.39285714285714285,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.17777777777777778,
+        "extra_unseen": 0.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.4444444444444444,
+        "swap_seen_id": 0.6444444444444445,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.010752688172043012
+    },
+    "hybrid_delegation_intent_t0.5": {
+      "n": 531,
+      "accuracy": 0.6741996233521658,
+      "recall_allow": 0.6071428571428571,
+      "recall_confirm": 0.6487804878048781,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.17647058823529413,
+      "prompt_rate_on_legit": 0.39285714285714285,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.17777777777777778,
+        "extra_unseen": 0.0,
+        "permission_flip": 1.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.4444444444444444,
+        "swap_seen_id": 0.6444444444444445,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.010752688172043012
+    },
+    "hybrid_delegation_rules_t0.9": {
+      "n": 531,
+      "accuracy": 0.7250470809792844,
+      "recall_allow": 0.35714285714285715,
+      "recall_confirm": 0.9512195121951219,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.01278772378516624,
+      "prompt_rate_on_legit": 0.6428571428571429,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.0,
+        "extra_unseen": 0.0,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.1111111111111111,
+        "swap_seen_id": 0.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.0
+    },
+    "hybrid_delegation_intent_t0.9": {
+      "n": 531,
+      "accuracy": 0.7250470809792844,
+      "recall_allow": 0.35714285714285715,
+      "recall_confirm": 0.9512195121951219,
+      "recall_block": 0.7526881720430108,
+      "unsafe_allow_rate": 0.01278772378516624,
+      "prompt_rate_on_legit": 0.6428571428571429,
+      "block_rate_on_legit": 0.0,
+      "unsafe_allow_by_mutation": {
+        "extra_seen": 0.0,
+        "extra_unseen": 0.0,
+        "permission_flip": 0.0,
+        "swap_attachment": 0.0,
+        "swap_seen": 0.1111111111111111,
+        "swap_seen_id": 0.0,
+        "swap_unseen": 0.0,
+        "swap_unseen_id": 0.0
+      },
+      "injected_allowed_rate": 0.0
+    }
+  }
+}

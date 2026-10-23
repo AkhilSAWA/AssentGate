@@ -53,6 +53,13 @@ class ArgumentEvidence(BaseModel):
     detail: str | None = None
     # True only when provenance comes from instrumentation, never from a guess.
     verified: bool = False
+    # The single argument value this evidence is about (a list argument gets one entry per value).
+    value: str | None = None
+    # For TOOL_OUTPUT: field path inside the tool result, and whether the value was the whole
+    # field ("exact") or only found inside a longer text ("contained"), with surrounding text.
+    path: str | None = None
+    match: Literal["exact", "contained"] | None = None
+    snippet: str | None = None
 
 
 class HistoryEntry(BaseModel):
@@ -61,12 +68,24 @@ class HistoryEntry(BaseModel):
     executed: bool
 
 
+class DelegatedSource(BaseModel):
+    """A record of an earlier tool output that the user's request explicitly hands authority to
+    ("do the actions specified in the email from X", "each person mentioned in file Y")."""
+
+    source: str  # tool output label, e.g. "search_emails#0"
+    record: str  # path of the record inside that output, e.g. "[0]"
+    named_by: list[str]  # which of its fields the request names (sender, subject, filename, title)
+    text: str  # the record's text, for checking that a value or action comes from it
+
+
 class AuthorizationRequest(BaseModel):
     user_request: str
     policy: str = ""
     tool_call: ToolCall
     evidence: list[ArgumentEvidence] = Field(default_factory=list)
     history: list[HistoryEntry] = Field(default_factory=list)
+    # Filled by the dispatcher only (instrumentation), never by the caller.
+    delegated_sources: list[DelegatedSource] = Field(default_factory=list)
 
 
 class GateResult(BaseModel):
