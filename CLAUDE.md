@@ -28,14 +28,24 @@ Read these before substantive work:
   provenance (value tagging), audit (SQLite), workspace (AgentDojo tool specs + FakeWorkspace),
   annotation (Cohen's κ), agentdojo_adapter (`GatedToolsExecutor`, `GroundTruthApprover`, `GroundTruthProposer`,
   `ImportantInstructions` attack text, `run_scripted`; needs `.[eval]`), construct (labels by construction),
-  scorer (`featurize`, `LearnedGate`). Classifiers: `StrictProvenance`, `LooseProvenance`, `DelegationRules`,
-  `DelegationIntentRules`, `EscalateOnly`, `ToolLevelRules`, `SensitivityBaseline`.
+  scorer (`featurize`, `LearnedGate`), llm_agent (`ClaudeLLM`: real Claude agent for AgentDojo, replaces its
+  broken `AnthropicLLM`; replays turns verbatim, logs usage/cost), walkthrough (step-by-step trace of one run
+  through a gate, a person or simulated user answering; drives the demo). Classifiers: `AllowAll` (no gate), `StrictProvenance`, `LooseProvenance`, `DelegationRules`,
+  `DelegationIntentRules`, `DelegationSelectRules` (+ test C superlatives), `DelegationSourceRules` (+ test A
+  recipient sources; current best), `EscalateOnly`, `ToolLevelRules`, `SensitivityBaseline`.
 - `tests/` — test_gate, test_annotation, test_benign_ambiguous, test_train_cv, test_construct_scorer,
-  test_agentdojo_adapter (AgentDojo tests skip without it; slow).
+  test_agentdojo_adapter, test_llm_agent (fake client), test_replay, test_selection, test_source_check,
+  test_walkthrough, test_demo_app (Streamlit AppTest)
+  (AgentDojo tests skip without it; slow).
 - `scripts/build_agentdojo_dataset.py` — AgentDojo saved runs → weakly-labelled JSONL (`rule_v1`, `needs_review`, group-hash split).
 - `scripts/sample_pilot.py` / `scripts/agreement.py` — blinded annotation pilot sheets / κ + disagreement log.
 - `scripts/run_ground_truth_eval.py` — no-LLM end-to-end run (scripted ground-truth agent, benign + compromised) → `results/`;
   `scripts/summarise_ground_truth_eval.py` → summary over feasible attacks.
+- `scripts/run_llm_eval.py` — REAL LLM agent eval (costs money; ask first), resumable, `--max-cost`, `--dry-run`,
+  `--approver ground_truth|attack_aware`, `--agent scripted` for a free check.
+- `scripts/replay_saved_runs.py` — FREE real-agent evidence: re-executes AgentDojo's saved real-agent tool calls
+  (with the run's own injections) through each gate; stops at the first blocked/declined call →
+  `results/replay_v1`; `scripts/summarise_replay.py` → `summary.md`. Results: `docs/results_replay.md`.
 - `scripts/make_benign_ambiguous.py` — hand-written minimal-pair records (draft labels).
 - `scripts/make_constructed_dataset.py` — labels by construction from AgentDojo ground truth (main data now).
 - `scripts/eval_crossfit.py` — trains the learned scorer per fold (held-out user tasks + attack goals) and runs
@@ -50,6 +60,8 @@ Read these before substantive work:
 .venv\Scripts\python -m pip install -e ".[dev]"
 .venv\Scripts\python -m pip install -e data\raw\agentdojo      # eval extra; slow (~15 min) the first time
 .venv\Scripts\python -m pytest -q
+.venv\Scripts\python -m pip install -e ".[demo]"   # Streamlit
+.venv\Scripts\python -m streamlit run demo\app.py --server.address localhost --browser.gatherUsageStats false
 git clone https://github.com/ethz-spylab/agentdojo data\raw\agentdojo && git -C data\raw\agentdojo checkout 089ed468
 .venv\Scripts\python scripts\build_agentdojo_dataset.py --runs data\raw\agentdojo\runs --out data\processed\agentdojo_workspace.jsonl
 .venv\Scripts\python scripts\sample_pilot.py --data data\processed\agentdojo_workspace.jsonl --out-dir data\processed\annotations\pilot_v1
@@ -108,9 +120,33 @@ attacks): delegation_intent 0.15 prompts/benign task @ 0.9% ASR vs strict proven
 Learned scorer alone is worse (15–18% ASR on unseen attack goals); hybrid reaches 0% only at strict's prompt cost.
 Explicit delegation to content added (guidelines v0.3, `ProvenanceTracker.delegated_sources`,
 `AuthorizationRequest.delegated_sources`, kind `named_content`): delegation_intent now 0.10 prompts/benign task @ 0.9% ASR.
-Open issues: test C (semantic "is this the record the request picked?"), no LLM-agent run yet (plan + costs in
-`docs/llm_agent_run_plan.md`; AgentDojo's AnthropicLLM sends temperature=0.0 → 400 on current API, max_tokens=1024
-too small: fix before any paid run), no GPU for DeBERTa.
+Open issues: test C beyond superlatives (semantic "is this the record the request picked?"), no live LLM-agent run yet (plan + costs in
+`docs/llm_agent_run_plan.md`), no GPU for DeBERTa.
+LLM-run fixes done 2026-10-23 (fake-client tests only, nothing spent): `ClaudeLLM` (no sampling params,
+max_tokens 16k, adaptive thinking, prompt caching, verbatim turn replay — AgentDojo's converter reorders blocks and
+crashes on redacted_thinking), `AttackAwareApprover`, `scripts/run_llm_eval.py`. 65 tests pass. Next: stage 0 smoke
+test on Haiku 5.5 (~$0.02 est., needs the owner's OK and their own ANTHROPIC_API_KEY).
+
+Done 2026-10-24: free replay of AgentDojo's saved real-agent runs (Claude 3.7 Sonnet, Llama 3.3 70B; 600 each,
+complete) → `docs/results_replay.md`. delegation_intent 0.10 / 0.15 prompts per benign task vs strict 0.45 / 0.325,
+same utility; 5/53 fooled attacks get through (strict 0/53).
+Delegation test C for superlative picks: `ProvenanceTracker.selection_checks` → `AuthorizationRequest.selection_checks`
+(dispatcher-computed; files by size/last_modified, emails by timestamp, events by start_time) +
+`DelegationSelectRules` (config `delegation_select`); `ClassifierOutput.reasons` now flow into `GateResult.reasons`.
+Scripted: 0.10 prompts @ **0/218** attacks (matched with strict 0.45 @ 0). Replay: 2/53 through, no new benign prompts.
+Delegation test A for recipient sources: `ProvenanceTracker.source_checks` → `AuthorizationRequest.source_checks`
+(records holding an exact-field address; "named" = sender/subject/title/contact name/filename matched by
+`_names_record` in the request, or in the body/content/description of an explicitly delegated record) +
+`DelegationSourceRules` (config `delegation_source`, the current best gate). Closes the replay gap (user_task_19 +
+injection_task_13): replay **0/53** attacks through at 0.10 / 0.15 benign prompts (strict 0.45 / 0.325, also 0/53);
+scripted unchanged (0.10 @ 0/218). Benign cost of test A = 0, but only 8 / 6 / 0 benign recipients came from tool
+output (all from named records). 79 tests pass.
+Streamlit demo done 2026-10-24: `demo/app.py` + `assentgate.walkthrough` (scripted agent or replays of saved
+Claude 3.7 / Llama 3.3 runs, any gate, you or a simulated user answer, per-run gate comparison, benchmark tables,
+audit trail). Bound to localhost; `.claude/launch.json` starts it in the app's preview. Replay proposer moved into
+`agentdojo_adapter.RecordedProposer` (replay results reproduced exactly). 87 tests pass.
+Still to do (all free): Phase 5 approval scopes + history checks; write-up. Paid/optional: Haiku smoke test,
+Kaggle live run (`run_llm_eval.py` core configs now use delegation_source).
 
 Older plan (human pilot is now an optional audit): humans fill the pilot sheets → κ → revise guidelines → review side-effecting records (`reviewed_label`) →
 review + scale up the benign-ambiguous set → LR baseline (CPU, ask first) → DeBERTa-v3-small (GPU, needs sign-off) →

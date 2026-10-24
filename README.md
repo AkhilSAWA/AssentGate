@@ -18,8 +18,10 @@ unauthorized recipient, file or destination.
 
 ## Status
 
-This is the initial scaffold. Everything below "Implemented" exists and is tested; everything
-under "Roadmap" is the reference design and is **not built yet**.
+A research prototype. Everything below "Implemented" exists and is tested. Results so far are in
+[docs/results_delegation_eval.md](docs/results_delegation_eval.md) (scripted agent) and
+[docs/results_replay.md](docs/results_replay.md) (replays of saved real-agent runs); progress is
+tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 **Implemented**
 
@@ -31,14 +33,18 @@ under "Roadmap" is the reference design and is **not built yet**.
   so a changed recipient or document triggers reevaluation. Single-use, with a 30-minute TTL by default.
 - `provenance.py`: the dispatcher tags tool outputs and the user request. Arguments that reuse
   those values get `verified=True` evidence; caller-supplied evidence is never verified.
-- `classifier.py`: the `Classifier` interface plus `SensitivityBaseline`, a placeholder
-  that confirms every side-effecting call (evaluation baseline 3). **No trained model yet.**
+- `classifier.py`: the `Classifier` interface, the baselines (no gate, tool-level rules, confirm
+  every side effect, strict and loose provenance) and AssentGate's rule gates. `DelegationSourceRules`
+  is the current best: delegation-aware value checks, an action-intent check, and delegation tests C
+  (superlative picks) and A (recipient sources). `scorer.py` holds a learned scorer (sentence
+  embeddings + logistic regression); it doesn't beat the rules yet.
 - `questions.py`: template-based, per-field confirmation questions.
 - `gate.py`: the pipeline (policy → classifier → approvals).
 - `dispatcher.py` + `audit.py`: controlled execution, re-running the gate after approvals,
   feeding the last 5 calls in as history, and recording every decision to SQLite.
 - `workspace.py`: AgentDojo workspace tool specs (names/args as of commit 089ed468) and
   in-memory sandbox handlers for a subset of them.
+- `walkthrough.py`: a step-by-step trace of one AgentDojo run through a gate (drives the demo below).
 
 ## Getting started
 
@@ -94,6 +100,31 @@ baselines 1–3 are in [docs/results_scripted_eval.md](docs/results_scripted_eva
 .venv\Scripts\python -W ignore scripts\run_ground_truth_eval.py --out results\ground_truth_v1.2.2
 ```
 
+## Demo
+
+A free, local Streamlit app (no LLM calls) that steps through AgentDojo workspace runs with the gate
+of your choice. You can run the scripted ground-truth agent, or replay saved real-agent runs (Claude 3.7
+Sonnet, Llama 3.3 70B). For each tool call it shows:
+
+- the call and the gate's decision, with its reasons;
+- where each sensitive value came from, and the test A/C checks;
+- the tool output, with planted attack text highlighted.
+
+You can answer AssentGate's questions yourself or let a simulated user answer. It also compares all gates
+on the same run and shows the benchmark tables from `results/`.
+
+```bash
+.venv\Scripts\python -m pip install -e ".[demo]"
+```
+
+```bash
+.venv\Scripts\python -m streamlit run demo\app.py --server.address localhost --browser.gatherUsageStats false
+```
+
+It needs AgentDojo installed (see above). Replays also need the saved runs in `data\raw\agentdojo\runs`
+(the pinned clone). Limits: recordings can't react to the gate, so a replay stops at the first blocked or
+declined call. The scripted agent always follows the task's correct steps.
+
 ## Annotation pilot
 
 ```bash
@@ -116,7 +147,7 @@ baselines 1–3 are in [docs/results_scripted_eval.md](docs/results_scripted_eva
    explicit sign-off first.
 4. **End-to-end eval in AgentDojo:** attack success rate, benign utility, confirmations per task,
    unnecessary-confirmation rate, unsafe-allow / false-block rates, latency.
-5. **Interfaces:** FastAPI authorization endpoint, Streamlit demo.
+5. **Interfaces:** FastAPI authorization endpoint (not built), Streamlit demo (built: `demo/app.py`).
 
 Main hypothesis: AssentGate reduces unnecessary confirmations at comparable safety, not
 just by allowing more actions. Offline classifier scores alone don't show end-to-end security.

@@ -46,7 +46,7 @@ class AssentGate:
                 decision=Decision.BLOCKED,
                 affected_fields=prediction.affected_fields,
                 confidence=prediction.confidence,
-                reasons=verdict.reasons + ["Classifier judged the call unauthorized."],
+                reasons=verdict.reasons + prediction.reasons + ["Classifier judged the call unauthorized."],
                 decided_by="classifier",
             )
 
@@ -61,7 +61,7 @@ class AssentGate:
             return GateResult(
                 decision=prediction.decision,
                 confidence=prediction.confidence,
-                reasons=verdict.reasons,
+                reasons=verdict.reasons + prediction.reasons,
                 decided_by="classifier",
             )
 
@@ -70,7 +70,7 @@ class AssentGate:
                 decision=Decision.AUTHORIZED,
                 affected_fields=sorted(pending),
                 confidence=prediction.confidence,
-                reasons=verdict.reasons + ["Covered by a scoped user approval."],
+                reasons=verdict.reasons + prediction.reasons + ["Covered by a scoped user approval."],
                 decided_by="approval",
             )
 
@@ -79,7 +79,7 @@ class AssentGate:
             decision=Decision.CONFIRMATION_REQUIRED,
             affected_fields=fields,
             confidence=prediction.confidence,
-            reasons=verdict.reasons,
+            reasons=verdict.reasons + prediction.reasons,
             questions=confirmation_questions(call, fields),
             decided_by="policy" if verdict.confirm_fields else "classifier",
         )

@@ -22,7 +22,16 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
-from assentgate.schemas import ArgumentEvidence, DelegatedSource, EvidenceSource, ToolCall
+from datetime import datetime
+
+from assentgate.schemas import (
+    ArgumentEvidence,
+    DelegatedSource,
+    EvidenceSource,
+    SelectionCheck,
+    SourceCheck,
+    ToolCall,
+)
 
 MIN_CONTAINED_LEN = 8
 DELEGATED_TEXT_CHARS = 4000
@@ -33,6 +42,54 @@ EXPLICIT_DELEGATION = re.compile(
     r"\b(?:(?:actions?|tasks?|instructions?|steps?|requests?|things)\s+(?:specified|described|listed|"
     r"mentioned|given|requested|outlined)\s+in|do\s+what\b.{0,60}?\b(?:says|asks|requests)|"
     r"follow\s+(?:the\s+)?(?:instructions|steps|directions)|(?:mentioned|listed|named)\s+in)\b", re.I)
+
+
+# Superlative picks for delegation test C: "the largest file", "the most recent email".
+# Relative words ("next", "last", "first") are left out: they depend on today's date or on order.
+SELECTION = re.compile(
+    r"\b(largest|biggest|smallest|latest|most\s+recent|newest|oldest|earliest)\s+(?:[a-z'-]+\s+){0,2}?"
+    r"(files?|documents?|emails?|messages?|events?|meetings?|appointments?)\b", re.I)
+SELECTION_ORDER = {"largest": ("size", max), "biggest": ("size", max), "smallest": ("size", min),
+                   "latest": ("time", max), "most recent": ("time", max), "newest": ("time", max),
+                   "oldest": ("time", min), "earliest": ("time", min)}
+# Record kind -> (field that marks a record of this kind, {attribute: field holding it}).
+RECORD_KINDS = {
+    "file": ("filename", {"size": "size", "time": "last_modified"}),
+    "email": ("sender", {"time": "timestamp"}),
+    "event": ("start_time", {"time": "start_time"}),
+}
+NOUN_KIND = {"file": "file", "document": "file", "email": "email", "message": "email",
+             "event": "event", "meeting": "event", "appointment": "event"}
+RECORD_ID = "id_"
+# Delegation test A ("the request names the source"): fields by which a request can name a record.
+# Emails by sender or subject, events by title, files by filename, contacts by name.
+SOURCE_NAMING_FIELDS = ("sender", "subject", "title", "filename", "name")
+# The content a user hands over under explicit delegation (guidelines v0.3), as opposed to the
+# delegated record's own headers (its sender, recipients...).
+DELEGATED_CONTENT_FIELDS = ("body", "content", "description")
+SOURCE_DESCRIBE_CHARS = 40
+
+
+def _within(record: str, outer: str) -> bool:
+    """True if `record` is `outer` or nested inside it ('' is a whole single-record output)."""
+    return record == outer or not outer or record.startswith(outer + ".") or record.startswith(outer + "[")
+
+
+def _describe(fields: list[tuple[str, str]]) -> str:
+    parts = [f"{f}={t[:SOURCE_DESCRIBE_CHARS]}" for f, t in fields if f in SOURCE_NAMING_FIELDS]
+    return " ".join(parts)
+
+
+def _sort_key(attribute: str, text: str):
+    if attribute == "size":
+        try:
+            return float(text.replace(",", ""))
+        except ValueError:
+            return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def _names_record(field: str, value: str, request_lower: str, request_words: set[str]) -> bool:
@@ -159,6 +216,110 @@ class ProvenanceTracker:
                     out.append(DelegatedSource(source=label, record=record, named_by=named,
                                                text=" ".join(t for _, t in fields)[:DELEGATED_TEXT_CHARS]))
         return out
+
+    def _records(self, kind: str) -> dict[str, dict[str, str]]:
+        """Records of one kind seen in earlier outputs, by id (the latest copy wins)."""
+        marker, _ = RECORD_KINDS[kind]
+        out: dict[str, dict[str, str]] = {}
+        for _, items in self._outputs:
+            grouped: dict[str, dict[str, str]] = {}
+            for path, text in items:
+                grouped.setdefault(_parent(path), {})[field_name(path)] = text
+            for fields in grouped.values():
+                if RECORD_ID in fields and marker in fields:
+                    out[fields[RECORD_ID]] = fields
+        return out
+
+    def selection_checks(self, call: ToolCall, user_request: str,
+                         sensitive_fields: Iterable[str] = ()) -> list[SelectionCheck]:
+        """For each superlative pick in the request ("the largest file"), the record that rule selects
+        among the records seen so far, compared with the record id a sensitive argument uses.
+
+        Only ids of seen records of the same kind are checked; values from elsewhere are left to the
+        provenance evidence. A rule over seen records only: if the agent never listed everything, the
+        "largest seen" may not be the largest that exists.
+        """
+        checks = []
+        sensitive = set(sensitive_fields)
+        for m in SELECTION.finditer(user_request):
+            word = re.sub(r"\s+", " ", m.group(1).lower())
+            noun = m.group(2).lower().rstrip("s")
+            kind = NOUN_KIND[noun]
+            attribute, pick = SELECTION_ORDER[word]
+            attr_field = RECORD_KINDS[kind][1].get(attribute)
+            if attr_field is None:  # e.g. "largest email": no size field to rank by
+                continue
+            records = self._records(kind)
+            keyed = {rid: _sort_key(attribute, f.get(attr_field, "")) for rid, f in records.items()}
+            keyed = {rid: k for rid, k in keyed.items() if k is not None}
+            if not keyed:
+                continue
+            best = pick(keyed.values())
+            expected = sorted(rid for rid, k in keyed.items() if k == best)
+            phrase = f"{word} {noun}"
+            for field, arg in call.arguments.items():
+                if field not in sensitive:
+                    continue
+                for _, value in leaves(arg):
+                    if value not in keyed:
+                        continue
+                    detail = (f"{attr_field} of '{value}' = {records[value][attr_field]}; {word} seen = "
+                              f"{records[expected[0]][attr_field]} ({', '.join(repr(e) for e in expected)})")
+                    checks.append(SelectionCheck(field=field, value=value, phrase=phrase,
+                                                 expected=expected, detail=detail))
+        return checks
+
+    def delegated_content(self, delegated: Iterable[DelegatedSource]) -> list[str]:
+        """Free text (body, content, description) of the records a request explicitly delegates to."""
+        out = []
+        for ds in delegated:
+            for label, items in self._outputs:
+                if label == ds.source:
+                    out += [t for p, t in items
+                            if field_name(p) in DELEGATED_CONTENT_FIELDS and _within(_parent(p), ds.record)]
+        return out
+
+    def source_checks(self, call: ToolCall, user_request: str, recipient_fields: Iterable[str] = (),
+                      delegated: Iterable[DelegatedSource] = ()) -> list[SourceCheck]:
+        """Delegation test A for recipient values that are a whole field of an earlier output.
+
+        For each such address, every record holding it (in any earlier output) and which of those
+        records the request names: one of its SOURCE_NAMING_FIELDS matches the request the same way
+        explicit delegation does (`_names_record`), or matches the content of a record the request
+        explicitly delegates to (one hop, guidelines v0.3). A record nested in a named record (an
+        event attached to a named email) counts as named. Values found nowhere as a whole field get no
+        check; the provenance evidence covers them.
+        """
+        fields = set(recipient_fields)
+        text = " ".join([user_request, *self.delegated_content(delegated)]).lower()
+        words = set(re.findall(r"[a-z0-9]+", text))
+        records_by_output = []
+        for label, items in self._outputs:
+            grouped: dict[str, list[tuple[str, str]]] = {}
+            for path, t in items:
+                grouped.setdefault(_parent(path), []).append((field_name(path), t))
+            named = {r: sorted({f for f, t in fs if f in SOURCE_NAMING_FIELDS and _names_record(f, t, text, words)})
+                     for r, fs in grouped.items()}
+            records_by_output.append((label, grouped, {r: n for r, n in named.items() if n}))
+        checks = []
+        for field, arg in call.arguments.items():
+            if field not in fields:
+                continue
+            for _, value in leaves(arg):
+                low = value.lower()
+                found, named_in = [], []
+                for label, grouped, named in records_by_output:
+                    for record, fs in grouped.items():
+                        if not any(t.lower() == low for _, t in fs):
+                            continue
+                        where = f"{label}{record}"
+                        found.append(f"{where} ({_describe(fs)})" if _describe(fs) else where)
+                        hits = sorted({f for outer, n in named.items() if _within(record, outer) for f in n})
+                        if hits:
+                            named_in.append(f"{where} (named by {', '.join(hits)})")
+                if found:
+                    checks.append(SourceCheck(field=field, value=value, found_in=found, named=named_in))
+        return checks
 
     def seen_values(self, field_names: Iterable[str]) -> list[str]:
         """Distinct values earlier outputs returned under the given field names, most recent first."""

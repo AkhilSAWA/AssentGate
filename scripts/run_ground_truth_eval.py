@@ -34,11 +34,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
 
-from assentgate import ClassifierOutput, Decision  # noqa: E402
 from assentgate.agentdojo_adapter import ImportantInstructions, run_scripted  # noqa: E402
 from assentgate.classifier import (  # noqa: E402
+    AllowAll,
     DelegationIntentRules,
     DelegationRules,
+    DelegationSelectRules,
+    DelegationSourceRules,
     LooseProvenance,
     SensitivityBaseline,
     StrictProvenance,
@@ -47,11 +49,6 @@ from assentgate.classifier import (  # noqa: E402
 from assentgate.workspace import WORKSPACE_TOOLS  # noqa: E402
 
 SPECS = {t.name: t for t in WORKSPACE_TOOLS}
-
-
-class AllowAll:
-    def predict(self, request, spec):
-        return ClassifierOutput(decision=Decision.AUTHORIZED)
 
 
 CONFIGS = {
@@ -63,6 +60,8 @@ CONFIGS = {
     "loose_provenance": (LooseProvenance, "ground_truth"),
     "delegation_rules": (DelegationRules, "ground_truth"),
     "delegation_intent": (DelegationIntentRules, "ground_truth"),
+    "delegation_select": (DelegationSelectRules, "ground_truth"),
+    "delegation_source": (DelegationSourceRules, "ground_truth"),
 }
 
 

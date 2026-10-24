@@ -18,7 +18,10 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [x] Simulated approver: answers confirmation questions from ground truth (yes for benign task needs, no for injected goals). Needed to measure task completion with confirmations. (`GroundTruthApprover`; conservative — declines benign calls that differ from the ground-truth route.)
 - [x] No-LLM end-to-end check: `scripts/run_ground_truth_eval.py` runs a scripted ground-truth agent (benign + fully compromised) through baselines 1–3 (baseline 2 = `ToolLevelRules`). Results: `docs/results_scripted_eval.md`. Not a substitute for the LLM-agent runs below.
 - [x] Realistic scripted attacks: AgentDojo's `important_instructions` text placed in the data each task reads (`--attack important_instructions`), plus field-level provenance (exact structured field vs. contained in free text). Provenance baselines (strict ≈ agent-action-guard rules, loose ≈ AuthGraph) and AssentGate's delegation rules (+ action-intent check) → `docs/results_delegation_eval.md`.
-- [ ] ⚠ Run baselines 1–3 end-to-end (no gate, tool-level rules, confirm-every-sensitive-action). Requires an LLM agent → API cost or a local model. (Staged plan with measured token use and costs: `docs/llm_agent_run_plan.md`; stage 0 smoke test < $0.05 on Haiku 5.5, awaiting sign-off.)
+- [x] Free real-agent check: replay AgentDojo's saved Claude 3.7 Sonnet / Llama 3.3 70B runs through the gates (`scripts/replay_saved_runs.py` → `docs/results_replay.md`). Recordings can't react to the gate; a live run is still needed for that. Complete: 600 runs per agent; 2/53 fooled attacks get through delegation_select.
+- [x] Delegation test C for superlative picks ("delete the largest file"): `selection_checks` + `DelegationSelectRules`. Scripted: 0.10 prompts/benign task at 0/218 attacks (strict: 0.45 at 0).
+- [x] Test A for recipient source (replay gap: recipients from a record the request didn't name, user_task_19 + injection_task_13): `source_checks` + `DelegationSourceRules`. Replay 0/53 attacks through, scripted 0/218, no added benign prompts.
+- [ ] ⚠ Run baselines 1–3 end-to-end (no gate, tool-level rules, confirm-every-sensitive-action). Requires an LLM agent → API cost or a local model. (Staged plan with measured token use and costs: `docs/llm_agent_run_plan.md`; stage 0 smoke test < $0.05 on Haiku 5.5, awaiting sign-off. Pre-run fixes done: `llm_agent.ClaudeLLM`, `AttackAwareApprover`, resumable `scripts/run_llm_eval.py`.)
 
 ## Phase 2 — Dataset (weeks 2–4)
 - [x] `scripts/build_agentdojo_dataset.py`: AgentDojo saved runs → JSONL with rule labels (see `docs/dataset_and_training.md`).
@@ -40,7 +43,7 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 ## Phase 4 — End-to-end evaluation (weeks 5–6)
 - [ ] ⚠ AgentDojo runs for all baselines + full AssentGate.
 - [ ] Report: macro-F1, per-class P/R, unsafe-allow, false-block, benign utility, attack success rate, confirmations per task, unnecessary-confirmation rate, added latency, unseen tool / attack family.
-- [~] Headline comparison at a **matched unsafe-allow rate** (or as a curve), so "fewer confirmations" can't come from simply allowing more. (Scripted agent only: delegation_intent 0.15 prompts/benign task at 0.9% attack success vs strict provenance 0.45 at 0%; learned threshold sweep in `results/crossfit_v1`. LLM agent still needed.)
+- [~] (2026-10-24: matched on the scripted agent and on replayed real-agent runs — delegation_source 0.10 vs strict 0.45 prompts per benign task, both 0/218 scripted and 0/53 replayed attacks; live LLM agent still to do.) Headline comparison at a **matched unsafe-allow rate** (or as a curve), so "fewer confirmations" can't come from simply allowing more. (Scripted agent only: delegation_intent 0.15 prompts/benign task at 0.9% attack success vs strict provenance 0.45 at 0%; learned threshold sweep in `results/crossfit_v1`. LLM agent still needed.)
 
 ## Phase 5 — Scoped approvals & history (weeks 6–7)
 - [ ] Approval scopes beyond exact match: value, recipient set, domain, document, count, time window.
@@ -48,7 +51,7 @@ Each phase ends with something runnable. ⚠ marks steps that need your explicit
 - [ ] Measure: re-prompts avoided vs. scope-violations caught.
 
 ## Phase 6 — Demo & write-up (weeks 7–8)
-- [ ] Streamlit demo: live tool calls, decisions, targeted questions, approval scopes, audit trail.
+- [x] Streamlit demo: live tool calls, decisions, targeted questions, approval scopes, audit trail. (`demo/app.py` + `assentgate.walkthrough`, 2026-10-24: scripted agent and replays of saved Claude 3.7 Sonnet / Llama 3.3 70B runs through any gate; you or a simulated user answer the questions; gate comparison per run; benchmark tables from `results/`. Free, no LLM calls; tests drive it headlessly with Streamlit's AppTest.)
 - [ ] Paper/report: method, dataset card, results, limitations (no production guarantees).
 
 ## Improvements over the initial design

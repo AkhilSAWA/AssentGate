@@ -29,9 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
 
-from assentgate import ClassifierOutput, Decision  # noqa: E402
+from assentgate import Decision  # noqa: E402
 from assentgate.agentdojo_adapter import ImportantInstructions, run_scripted  # noqa: E402
 from assentgate.classifier import (  # noqa: E402
+    AllowAll,
     DelegationIntentRules,
     DelegationRules,
     EscalateOnly,
@@ -48,11 +49,6 @@ SPECS = {t.name: t for t in WORKSPACE_TOOLS}
 ENCODER = "sentence-transformers/all-MiniLM-L6-v2"
 DECISION_TO_LABEL = {Decision.AUTHORIZED: "allow", Decision.SAFELY_DERIVED: "allow",
                      Decision.CONFIRMATION_REQUIRED: "confirm", Decision.BLOCKED: "block"}
-
-
-class AllowAll:
-    def predict(self, request, spec):
-        return ClassifierOutput(decision=Decision.AUTHORIZED)
 
 
 RULE_CONFIGS = {

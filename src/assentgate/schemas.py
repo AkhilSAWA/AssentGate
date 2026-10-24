@@ -78,6 +78,38 @@ class DelegatedSource(BaseModel):
     text: str  # the record's text, for checking that a value or action comes from it
 
 
+class SelectionCheck(BaseModel):
+    """Delegation test C for superlative picks: the request selects one record by a rule
+    ("the largest file", "the latest email"). Which record does that rule select among the
+    records earlier tool outputs returned, and is it the one the call uses?"""
+
+    field: str  # argument holding the record id, e.g. "file_id"
+    value: str  # the id the call uses
+    phrase: str  # the request's selection phrase, e.g. "largest file"
+    expected: list[str]  # id(s) the rule selects (several on a tie)
+    detail: str = ""  # e.g. "size of '13' = 1,024; largest seen = 2,048 ('11')"
+
+    @property
+    def ok(self) -> bool:
+        return self.value in self.expected
+
+
+class SourceCheck(BaseModel):
+    """Delegation test A for recipients: an address that is a whole field of an earlier tool output
+    counts as given by the user only if a record holding it is one the request names (by sender,
+    subject, title, filename or contact name), or one named by a record the request explicitly
+    delegates to."""
+
+    field: str  # recipient argument, e.g. "recipients"
+    value: str  # the address
+    found_in: list[str]  # records holding it as a whole field, e.g. "get_day_calendar_events#1[0] (title=Team Sync)"
+    named: list[str] = Field(default_factory=list)  # those the request names, with the naming field
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.named)
+
+
 class AuthorizationRequest(BaseModel):
     user_request: str
     policy: str = ""
@@ -86,6 +118,8 @@ class AuthorizationRequest(BaseModel):
     history: list[HistoryEntry] = Field(default_factory=list)
     # Filled by the dispatcher only (instrumentation), never by the caller.
     delegated_sources: list[DelegatedSource] = Field(default_factory=list)
+    selection_checks: list[SelectionCheck] = Field(default_factory=list)
+    source_checks: list[SourceCheck] = Field(default_factory=list)
 
 
 class GateResult(BaseModel):

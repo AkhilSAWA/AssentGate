@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from assentgate.audit import AuditLog
 from assentgate.gate import AssentGate
+from assentgate.policy import RECIPIENT_FIELDS
 from assentgate.provenance import ProvenanceTracker
 from assentgate.schemas import AuthorizationRequest, GateResult, HistoryEntry
 
@@ -21,6 +22,8 @@ class DispatchResult:
     executed: bool
     output: Any = None
     error: str | None = None
+    # The request exactly as the gate saw it (instrumented evidence, history, checks).
+    request: AuthorizationRequest | None = None
 
 
 class Dispatcher:
@@ -42,12 +45,17 @@ class Dispatcher:
         # own record of past calls replaces any caller-supplied history.
         supplied = [e.model_copy(update={"verified": False}) for e in request.evidence]
         spec = self.gate.tools.get(request.tool_call.tool)
-        tagged = self.provenance.evidence_for(
-            request.tool_call, request.user_request, spec.sensitive_fields if spec else ()
-        )
+        sensitive = spec.sensitive_fields if spec else ()
+        tagged = self.provenance.evidence_for(request.tool_call, request.user_request, sensitive)
+        delegated = self.provenance.delegated_sources(request.user_request)
+        recipients = [f for f in sensitive if f in RECIPIENT_FIELDS]
         return request.model_copy(
             update={"evidence": supplied + tagged, "history": self.history[-HISTORY_LEN:],
-                    "delegated_sources": self.provenance.delegated_sources(request.user_request)}
+                    "delegated_sources": delegated,
+                    "selection_checks": self.provenance.selection_checks(
+                        request.tool_call, request.user_request, sensitive),
+                    "source_checks": self.provenance.source_checks(
+                        request.tool_call, request.user_request, recipients, delegated)}
         )
 
     def submit(self, request: AuthorizationRequest) -> DispatchResult:
@@ -70,7 +78,7 @@ class Dispatcher:
 
         self.audit.record(call, result, executed, error)
         self.history.append(HistoryEntry(tool_call=call, decision=result.decision, executed=executed))
-        return DispatchResult(result=result, executed=executed, output=output, error=error)
+        return DispatchResult(result=result, executed=executed, output=output, error=error, request=request)
 
     def approve_and_submit(
         self, request: AuthorizationRequest, single_use: bool = True

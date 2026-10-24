@@ -24,7 +24,7 @@ the smoke test (stage 0) measures it. Gated runs may need a little more, since b
 
 **One config = 600 runs** (40 user tasks benign + 40 × 14 injection tasks attacked). The real agent can attempt
 all 14 injection tasks, unlike the scripted one.
-**Core configs = 4:** no_gate, confirm_all, strict_provenance, delegation_intent → **2,400 runs ≈ 41M input tokens**.
+**Core configs = 4:** no_gate, confirm_all, strict_provenance, delegation_source (the current best AssentGate rules; was delegation_intent before tests C and A) → **2,400 runs ≈ 41M input tokens**.
 
 ## 2. Model options and estimated cost (Anthropic list prices, cached 2026-10-06, no caching or batch discount)
 
@@ -73,6 +73,23 @@ sent to a model company. Expect a weaker agent than Claude/Gemini, so present it
 free-tier data terms.
 
 ## 3. Problems to fix before any paid run (local, free)
+**Status 2026-10-23: all five done, tested with a fake client (no API calls, nothing spent).**
+- Fixes 1–3: `src/assentgate/llm_agent.py` (`ClaudeLLM`) replaces AgentDojo's `AnthropicLLM` instead of patching
+  the pinned clone. It sends no sampling parameters, `max_tokens=16000`, `thinking: {"type": "adaptive"}`
+  (AgentDojo's `budget_tokens` form is also a 400 now), optional `--effort`, and a top-level `cache_control`
+  for prompt caching. It replays each assistant turn **exactly as returned**. Checking fix 3 found two real
+  problems in AgentDojo's converter: it moves tool calls after all other blocks (reordering an interleaved
+  turn), and it raises `ValueError` on any `redacted_thinking` block. Also, `GatedToolsExecutor` parses
+  string-encoded lists in tool arguments in place, which would have edited the replayed `tool_use` input.
+  Verbatim replay avoids all three. It logs usage per model call and estimates cost.
+- Fix 4: `AttackAwareApprover` in `agentdojo_adapter.py`.
+- Fix 5: `scripts/run_llm_eval.py` (resumable, `--max-cost` guard, `--dry-run` estimate, `--workers`,
+  `--agent scripted` for a free check, optional transcripts). Tests: `tests/test_llm_agent.py`.
+- **Not verified against the real API yet**; the stage 0 smoke test is the first real check. Haiku 5.5's newer
+  tokenizer counts the same text as ~30% more tokens than the chars/4 planning figure, so expect the full
+  Haiku run nearer **~$9** than $7 before caching (dry run with planning figures: $6.96).
+
+Original notes:
 1. **`temperature` is rejected.** AgentDojo's `AnthropicLLM` sends `temperature=0.0` by default. The Claude API now
    returns 400 for `temperature`/`top_p`/`top_k` on every model, so construct it with `temperature=None`.
 2. **`max_tokens=1024` is too small** with thinking always on, and replies would get cut off. Raise it to ~16k.
@@ -86,6 +103,11 @@ free-tier data terms.
    doesn't re-spend money.
 
 ## 4. Staged plan (each stage needs your OK)
+Stage 0 command (you set `ANTHROPIC_API_KEY` first; `--max-cost` stops it early if the estimate is wrong):
+```
+.venv\Scripts\python -W ignore scripts\run_llm_eval.py --agent claude --model claude-haiku-5-5 --out results\llm_haiku_smoke --user-tasks user_task_0 --injection-tasks injection_task_0 --max-cost 0.25 --transcripts
+```
+
 | stage | what | runs | est. cost |
 |---|---|---|---|
 | 0. Smoke test | fixes 1–5, then 1 user task × (benign + 1 attack) × 4 configs on Haiku 5.5; measure real tokens incl. thinking | 8 | < $0.05 |

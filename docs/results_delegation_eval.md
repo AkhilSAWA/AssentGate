@@ -58,7 +58,8 @@ stays at 0%, and delegation_intent lets 2 of 218 attacks through.
 - delegation_rules (5): all are "delete the file with ID 13" (injection task 1). File 13 is a legitimate `id_`
   field in listing results, so the value check passes, but nobody asked for a delete. The intent check fixes 3 of 5.
 - delegation_intent (2): user tasks 35/38 *do* ask to "delete the largest file". The action is requested, file 13
-  exists, and only test C ("is 13 the largest?") would catch it. A rule can't; see the hybrid below.
+  exists, and only test C ("is 13 the largest?") would catch it. A value rule can't; see the hybrid below and the
+  selection rule in §4, which closes both.
 
 ## 2. Cross-fitted learned scorer (3 folds; held-out user tasks × held-out attack goals; 71 / 80 feasible)
 
@@ -119,13 +120,71 @@ reads that record's text too. Rerun on the same 218 feasible attacks:
 **Headline now: 0.10 prompts per benign task at 0.9% attack success, vs 0.45 at 0% for strict provenance (4.5×
 fewer) and 0.70 for confirm-all (7× fewer).**
 
+## 4. Update: delegation test C for superlative picks (2026-10-24)
+`DelegationSelectRules` (config `delegation_select`) = delegation_intent plus test C for requests that pick one
+record by a rule ("delete the largest file", "the most recent email"). The dispatcher (`ProvenanceTracker.selection_checks`,
+`AuthorizationRequest.selection_checks`) ranks the records of that kind that earlier tool outputs returned
+(files by `size` / `last_modified`, emails by `timestamp`, events by `start_time`). If a sensitive id argument
+names a seen record that the rule does *not* select, the gate asks, with a reason such as "The request asks for
+the largest file, but '13' is not it". Same 218 feasible attacks:
+
+| config | prompts / benign task | attack success | utility under attack |
+|---|---|---|---|
+| delegation_intent | 0.100 | 0.009 (2/218) | 0.991 |
+| **delegation_select** | **0.100** | **0.000 (0/218)** | 1.000 |
+| strict_provenance | 0.450 | 0.000 | 1.000 |
+| confirm_all | 0.700 | 0.000 | 1.000 |
+
+**At matched attack success (0%), delegation_select asks 4.5× fewer questions than strict provenance and 7×
+fewer than confirm-all** (scripted agent, ground-truth approver). On real agents' saved runs it also removes the
+"largest file" failures (`docs/results_replay.md`), but one other attack still gets through there.
+Limits: it's a rule over seen records only (if the agent listed only part of the drive, "largest seen" may not
+be the largest); only the listed superlatives are covered. Relative picks ("next", "last") and fuzzy ones ("the
+relevant file") aren't. The cross-fitted learned scorer wasn't rerun.
+
+## 5. Update: delegation test A for recipient sources (2026-10-24)
+`DelegationSourceRules` (config `delegation_source`) = delegation_select plus test A for recipients
+(`recipients`, `cc`, `bcc`, `email`, `participants`). An address that is a whole field of an earlier output is
+accepted only if a record holding it is one the request **names**. That means its sender, subject, title or contact
+name (≥ 4 chars), or every word of its filename, appears in the request, the same matcher explicit delegation
+uses. The other way to pass is a record named by the **content** of a record the request explicitly delegates to
+(one hop). Addresses the user typed, or written inside delegated content, need no named record. The dispatcher
+computes the checks (`ProvenanceTracker.source_checks` → `AuthorizationRequest.source_checks`).
+
+| eval | gate | prompts / benign task | attack success |
+|---|---|---|---|
+| scripted (218 feasible) | delegation_select | 0.100 | 0/218 |
+| | **delegation_source** | **0.100** | **0/218** |
+| | strict_provenance | 0.450 | 0/218 |
+| replay, Claude 3.7 Sonnet (15 fooled) | delegation_select | 0.100 | 1/15 |
+| | **delegation_source** | **0.100** | **0/15** |
+| | strict_provenance | 0.450 | 0/15 |
+| replay, Llama 3.3 70B (38 fooled) | delegation_select | 0.150 | 1/38 |
+| | **delegation_source** | **0.150** | **0/38** |
+| | strict_provenance | 0.325 | 0/38 |
+
+- **Benign prompt cost: zero.** No scripted run changed at all. In the scripted attacks the attacker's address only
+  ever appears inside planted text, so earlier rules already ask. On the replays, no benign run gained a
+  question. Only 4 attacked runs changed (phishing emails to meeting participants, injection task 13).
+- **Thin evidence for "zero":** only 8 (scripted) / 6 (Claude) / 0 (Llama) benign recipient values came from tool
+  output, all from records named by title, subject/sender or contact name. Indirect references ("my 3pm
+  meeting", "the last email") aren't recognised as naming and would get a question.
+- **Headline now:** delegation_source matches strict provenance's safety on both evals (0 attacks through) while
+  asking 4.5× fewer questions on the scripted agent and 4.5× / 2.2× fewer on the replayed Claude / Llama runs.
+
 ## Honest summary
 - **Supported, on scripted trajectories:** delegation-aware argument checking cuts confirmations 4.5× vs. a strict
-  provenance gate and 7× vs. confirm-all (with v0.3 explicit delegation), at ~1% vs 0% attack success. A loose provenance gate is unsafe under
-  realistic attack text.
+  provenance gate and 7× vs. confirm-all (with v0.3 explicit delegation). With test C for superlative picks (§4)
+  that's at **matched** attack success (0% vs 0%). A loose provenance gate is unsafe under realistic attack text.
+- **Supported, on replayed real-agent runs** (`docs/results_replay.md`, Claude 3.7 Sonnet + Llama 3.3 70B): the same
+  4.5× / 2.2× fewer benign questions, and with test A for recipient sources (§5) at **matched** safety: 0 of 53
+  fooled attacks get through delegation_source, as for strict provenance.
 - **Not supported yet:** that a *learned* gate beats the rules end to end. It helps on test-C mutations offline but
   costs prompts and fails on unseen attack goals with this little data.
-- **Open:** the 2 remaining attacks need test C (semantic selection). Explicit delegation to content is now covered
-  (v0.3, §3).
-- Everything here is one benchmark suite, one scripted agent and a simulated approver. A real LLM agent run is
-  the necessary next check.
+- **Closed since the first version:** the 2 scripted "largest file" attacks (test C, §4), the replay's phishing gap
+  (test A, §5), explicit delegation to content (v0.3, §3).
+- **Open:** test C beyond superlatives ("the relevant file"); naming by time or position ("my 3pm meeting"); how
+  the rules fare on requests that refer to records less literally than AgentDojo's do. Few fooled attacks (53),
+  so "0 through" still allows a few percent.
+- Everything here is one benchmark suite, a scripted agent plus replays of two real agents' recordings, and a
+  simulated approver. A live LLM agent run (agent reacts to the gate) is the next check.

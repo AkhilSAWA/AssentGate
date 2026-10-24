@@ -1,9 +1,9 @@
 """Authorization classifiers behind the `Classifier` protocol.
 
 Baselines (SensitivityBaseline = confirm every side effect, ToolLevelRules, Strict/Loose
-provenance), AssentGate's rule gates (DelegationRules, DelegationIntentRules) and the
-EscalateOnly combiner. The learned scorer lives in `assentgate.scorer`. The gate uses
-SensitivityBaseline when no classifier is given.
+provenance), AssentGate's rule gates (DelegationRules, DelegationIntentRules, DelegationSelectRules,
+DelegationSourceRules) and the EscalateOnly combiner. The learned scorer lives in
+`assentgate.scorer`. The gate uses SensitivityBaseline when no classifier is given.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ class ClassifierOutput(BaseModel):
     decision: Decision
     affected_fields: list[str] = Field(default_factory=list)
     confidence: float | None = None
+    reasons: list[str] = Field(default_factory=list)
 
 
 class Classifier(Protocol):
@@ -66,6 +67,13 @@ def value_sources(request: AuthorizationRequest, spec: ToolSpec) -> dict[tuple[s
         if key not in best or SOURCE_RANK[kind] < SOURCE_RANK[best[key]]:
             best[key] = kind
     return best
+
+
+class AllowAll:
+    """Baseline 1 (no gate): authorize every call."""
+
+    def predict(self, request: AuthorizationRequest, spec: ToolSpec) -> ClassifierOutput:
+        return ClassifierOutput(decision=Decision.AUTHORIZED)
 
 
 class _ProvenanceGate:
@@ -139,6 +147,49 @@ class DelegationIntentRules(DelegationRules):
         if out.decision is Decision.AUTHORIZED and not action_requested(spec.name, asked_by):
             return ClassifierOutput(decision=Decision.CONFIRMATION_REQUIRED, affected_fields=[])
         return out
+
+
+class DelegationSelectRules(DelegationIntentRules):
+    """Delegation + intent rules plus delegation test C for superlative picks: when the request
+    selects one record by a rule ("delete the largest file") and the call uses a seen record the rule
+    does not select, ask. The dispatcher computes the checks (`request.selection_checks`)."""
+
+    def predict(self, request: AuthorizationRequest, spec: ToolSpec) -> ClassifierOutput:
+        out = super().predict(request, spec)
+        if not spec.side_effecting or out.decision is Decision.BLOCKED:
+            return out
+        failed = [c for c in request.selection_checks if not c.ok]
+        if not failed:
+            return out
+        fields = sorted(set(out.affected_fields) | {c.field for c in failed})
+        reasons = [f"The request asks for the {c.phrase}, but '{c.value}' is not it: {c.detail}." for c in failed]
+        return ClassifierOutput(decision=Decision.CONFIRMATION_REQUIRED, affected_fields=fields,
+                                reasons=out.reasons + reasons)
+
+
+class DelegationSourceRules(DelegationSelectRules):
+    """Delegation + intent + test C rules plus delegation test A for recipients: an address that is a
+    whole field of an earlier output is accepted only if a record holding it is one the request names,
+    or one named by the content of a record the request explicitly delegates to. Addresses the user
+    typed, or that are written inside delegated content, need no named record. The dispatcher computes
+    the checks (`request.source_checks`)."""
+
+    def predict(self, request: AuthorizationRequest, spec: ToolSpec) -> ClassifierOutput:
+        out = super().predict(request, spec)
+        if not spec.side_effecting or out.decision is Decision.BLOCKED:
+            return out
+        kinds: dict[tuple[str, str], set[str]] = {}
+        for e in request.evidence:
+            if e.verified and e.value is not None:
+                kinds.setdefault((e.field, e.value), set()).add(evidence_kind(e, request))
+        failed = [c for c in request.source_checks if not c.ok
+                  and not kinds.get((c.field, c.value), set()) & {"user", "named_content"}]
+        if not failed:
+            return out
+        fields = sorted(set(out.affected_fields) | {c.field for c in failed})
+        reasons = [f"'{c.value}' comes from {c.found_in[0]}, a record the request doesn't name." for c in failed]
+        return ClassifierOutput(decision=Decision.CONFIRMATION_REQUIRED, affected_fields=fields,
+                                reasons=out.reasons + reasons)
 
 
 SEVERITY = {Decision.SAFELY_DERIVED: 0, Decision.AUTHORIZED: 0, Decision.CONFIRMATION_REQUIRED: 1,
