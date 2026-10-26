@@ -1,0 +1,64 @@
+# AssentGate demo: "authorization ledger" theme (paper and ink; colour only where it means a decision).
+# Fonts load from Google Fonts in the viewer's browser; without a connection the fallbacks are used.
+# A "name:url" font value takes no fallback list (Streamlit adds its own) and its URL must not contain commas.
+
+[server]
+address = "localhost"   # local only: not reachable from other machines on the network
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"  # no "Deploy" button: this demo runs locally
+
+[theme]
+font = "Public Sans:https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap"
+headingFont = "serif"  # Streamlit's bundled Source Serif: served locally
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+baseRadius = "2px"
+buttonRadius = "2px"
+showWidgetBorder = true
+showSidebarBorder = true
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+# Sizes are set here so headings can keep their real outline level (h1 > h2 > h3) at any visual size.
+headingFontSizes = ["2.5rem", "1.4rem", "1.15rem", "1rem", "0.95rem", "0.9rem"]
+
+[theme.light]
+headingFont = "serif"
+primaryColor = "#1F5C4A"
+backgroundColor = "#F7F5F0"
+secondaryBackgroundColor = "#EDE9E0"
+textColor = "#1E2124"
+borderColor = "#D3CDBF"
+linkColor = "#1F5C4A"
+codeBackgroundColor = "#EEEAE1"
+dataframeHeaderBackgroundColor = "#EDE9E0"
+greenColor = "#2E6B3B"
+orangeColor = "#97600C"
+redColor = "#A12F2A"
+grayColor = "#5E656D"
+blueColor = "#2F5878"
+
+[theme.light.sidebar]
+backgroundColor = "#EFECE4"
+secondaryBackgroundColor = "#F7F5F0"
+
+[theme.dark]
+headingFont = "serif"
+primaryColor = "#5DB596"
+backgroundColor = "#141619"
+secondaryBackgroundColor = "#1D2024"
+textColor = "#E5E1D8"
+borderColor = "#34383E"
+linkColor = "#7CC7AC"
+codeBackgroundColor = "#1A1D21"
+dataframeHeaderBackgroundColor = "#1D2024"
+greenColor = "#6BBE88"
+orangeColor = "#DFA54B"
+redColor = "#E7776F"
+grayColor = "#9AA1A9"
+blueColor = "#82A9C9"
+
+[theme.dark.sidebar]
+backgroundColor = "#181A1E"
+secondaryBackgroundColor = "#141619"

@@ -145,6 +145,9 @@ Streamlit demo done 2026-10-24: `demo/app.py` + `assentgate.walkthrough` (script
 Claude 3.7 / Llama 3.3 runs, any gate, you or a simulated user answer, per-run gate comparison, benchmark tables,
 audit trail). Bound to localhost; `.claude/launch.json` starts it in the app's preview. Replay proposer moved into
 `agentdojo_adapter.RecordedProposer` (replay results reproduced exactly). 87 tests pass.
+Demo redesign 2026-10-26: "authorization ledger" theme in `.streamlit/config.toml` (Public Sans / bundled
+Source Serif / IBM Plex Mono, light + dark palettes, 2px radius, colour only for decisions); flat ledger rows,
+held-question panel, one-line verdict; no emoji icons. 88 tests pass.
 Still to do (all free): Phase 5 approval scopes + history checks; write-up. Paid/optional: Haiku smoke test,
 Kaggle live run (`run_llm_eval.py` core configs now use delegation_source).
 

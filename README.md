@@ -121,6 +121,7 @@ on the same run and shows the benchmark tables from `results/`.
 .venv\Scripts\python -m streamlit run demo\app.py --server.address localhost --browser.gatherUsageStats false
 ```
 
+The look (fonts, light and dark palettes, local-only server) is in `.streamlit/config.toml`.
 It needs AgentDojo installed (see above). Replays also need the saved runs in `data\raw\agentdojo\runs`
 (the pinned clone). Limits: recordings can't react to the gate, so a replay stops at the first blocked or
 declined call. The scripted agent always follows the task's correct steps.

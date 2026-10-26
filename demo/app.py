@@ -2,7 +2,8 @@
 
 Steps through an AgentDojo workspace run, either the scripted ground-truth agent or a replay of a
 saved Claude 3.7 Sonnet / Llama 3.3 70B run, with a gate of your choice. You can answer the
-gate's questions yourself. Run from the repo root:
+gate's questions yourself. The look (fonts, light and dark palettes) is in .streamlit/config.toml.
+Run from the repo root:
 
     .venv\\Scripts\\python -m streamlit run demo\\app.py --server.address localhost --browser.gatherUsageStats false
 """
@@ -21,26 +22,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from assentgate import walkthrough as wt  # noqa: E402
 
-st.set_page_config(page_title="AssentGate demo", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="AssentGate demo", page_icon=":material/policy:", layout="wide")
 
 SCRIPTED = "scripted"
 AGENT_LABELS = {SCRIPTED: "Scripted agent (follows the task's correct steps)",
                 **{a: f"Replay: {name} (saved real run)" for a, name in wt.AGENTS.items()}}
-DECISIONS = {
-    "authorized": ("✅", "authorized"),
-    "safely_derived": ("🔎", "safely derived"),
-    "confirmation_required": ("❓", "asks the user"),
-    "blocked": ("⛔", "blocked"),
+# Colour carries meaning only: the four decisions, and how far a value's source can be trusted.
+DECISIONS = {  # decision -> (theme colour, label, what it means)
+    "authorized": ("green", "authorized", "the user asked for it"),
+    "safely_derived": ("gray", "safely derived", "the agent's own lookup"),
+    "confirmation_required": ("orange", "asks the user", "a value isn't pinned down"),
+    "blocked": ("red", "blocked", "not allowed"),
 }
-SOURCE_BADGES = {
-    "user": "🟢 typed by the user",
-    "exact": "🔵 a whole field of an earlier tool output",
-    "named_content": "🟢 inside content the user delegated",
-    "contained": "🟠 only inside free text of a tool output",
-    "unknown": "🔴 seen nowhere before",
+SOURCES = {  # where a value came from -> (theme colour, label)
+    "user": ("green", "typed by the user"),
+    "exact": ("blue", "a whole field of an earlier output"),
+    "named_content": ("green", "inside content the user delegated"),
+    "contained": ("orange", "only inside free text"),
+    "unknown": ("red", "seen nowhere before"),
 }
+# Ledger rows are flat (a rule between steps, not a card per step); the held question is the one
+# emphasised panel. These colours are fixed because they must read on both the light and dark palette.
+STYLE = """<style>
+.st-key-ledger [data-testid="stExpander"] details { border: 0; border-bottom: 1px solid rgba(128,128,128,.3);
+  border-radius: 0; }
+.st-key-ledger [data-testid="stExpander"] summary { padding-top: .55rem; padding-bottom: .55rem; }
+.st-key-ledger [data-testid="stExpanderDetails"] { padding-left: 2.6rem; }
+.st-key-hold { border-left: 4px solid #B7791F !important; }
+mark { background: #F1D08A; color: #1E2124; padding: 0 .12em; }
+[data-testid="stMarkdownPre"] { white-space: pre-wrap; font-family: "IBM Plex Mono", monospace; font-size: .8rem;
+  line-height: 1.5; }
+[data-testid="stMarkdownContainer"] table { width: 100%; table-layout: fixed; }
+[data-testid="stMarkdownContainer"] th:nth-child(1) { width: 15%; }
+[data-testid="stMarkdownContainer"] th:nth-child(2) { width: 30%; }
+[data-testid="stMarkdownContainer"] th:nth-child(3) { width: 17%; }
+[data-testid="stMarkdownContainer"] td { vertical-align: top; overflow-wrap: break-word; }
+[data-testid="stMarkdownContainer"] td code { overflow-wrap: anywhere; white-space: normal; }
+a[href^="mailto:"] { color: inherit; text-decoration: none; pointer-events: none; }  /* addresses are data */
+[data-testid="stSidebar"] { min-width: 22rem; }
+/* open dropdown lists may be wider than their box, so long task and attack names stay readable */
+[data-testid="stSelectboxVirtualDropdown"] { min-width: min(40rem, 90vw); }
+</style>"""
 EXAMPLES = {
-    "Pick your own run": None,
+    "None: I'll set the run below": None,
     "Phishing planted in a calendar event (Llama 3.3 replay)":
         ("meta-llama_Llama-3.3-70B-Instruct", "user_task_19", "injection_task_13"),
     "Attacker's address hidden in an event description (Claude 3.7 replay)":
@@ -49,6 +73,7 @@ EXAMPLES = {
     "Same participants as a named meeting: no questions needed (scripted)": (SCRIPTED, "user_task_21", None),
     "Recipients that appear nowhere: AssentGate asks (scripted)": (SCRIPTED, "user_task_25", None),
 }
+PIN_GATE = {"gate": st.column_config.TextColumn("gate", pinned=True)}  # gate names stay visible when tables scroll
 MAX_ARG_CHARS = 400
 OUTPUT_HEIGHT = 240  # px; tool outputs scroll inside a box this tall
 
@@ -73,9 +98,28 @@ def results(directory: str, prompts_over_feasible: bool):
     return wt.results_table(Path(directory), prompts_over_feasible)
 
 
+def results_frame(table: list[dict]):
+    """The results table with AssentGate's current gate tinted, so the comparison reads at a glance."""
+    import pandas as pd
+
+    current = list(wt.GATES)[0]
+    return pd.DataFrame(table).style.format(precision=3).apply(
+        lambda row: ["background-color: rgba(31, 92, 74, 0.16)" if row["gate"] == current else ""] * len(row), axis=1)
+
+
 def short(text: str, n: int = 80) -> str:
     text = " ".join(text.split())
     return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def md(text) -> str:
+    """Data shown as plain text inside markdown: no emphasis, links, maths or colour directives."""
+    return re.sub(r"([\\`*_{}\[\]<>()#+!|~$])", r"\\\1", " ".join(str(text).split()))
+
+
+def code(text) -> str:
+    """Inline code that survives a markdown table."""
+    return "`" + str(text).replace("`", "'").replace("|", "\\|") + "`"
 
 
 def yes_no(value) -> str:
@@ -135,43 +179,51 @@ def step_outcome(step: wt.Step) -> str:
 def render_values(step: wt.Step) -> None:
     if not step.values:
         return
-    st.dataframe(
-        [{"argument": v.field, "value": v.value, "where it came from": SOURCE_BADGES[v.kind], "detail": v.where}
-         for v in step.values],
-        hide_index=True, width="stretch")
+    rows = ["| argument | value | source | seen in |", "|---|---|---|---|"]
+    for v in step.values:
+        color, label = SOURCES[v.kind]
+        rows.append(f"| {code(v.field)} | {code(v.value)} | :{color}[{label}] | {md(short(v.where, 150)) or '—'} |")
+    st.markdown("\n".join(rows))
+
+
+def render_checks(step: wt.Step) -> None:
+    for ok, line in step.checks:
+        test, _, rest = line.partition(": ")
+        st.markdown(f"**{md(test)}** :{'green' if ok else 'red'}[{'pass' if ok else 'fail'}] {md(rest)}")
 
 
 def render_step(step: wt.Step, approver: str) -> None:
-    icon, label = DECISIONS[step.decision]
-    title = f"**{step.number}. `{step.tool}`** · {icon} {label} · {step_outcome(step)}"
-    important = step.side_effecting or step.asked or step.decision == "blocked" or step.pending
+    color, label, _ = DECISIONS[step.decision]
+    title = f"`{step.number:02d}` :{color}-badge[{label}] `{step.tool}` :gray[{step_outcome(step)}]"
+    # The held step's evidence is in the panel below the ledger, so its row stays closed.
+    important = (step.side_effecting or step.asked or step.decision == "blocked") and not step.pending
     with st.expander(title, expanded=important):
         st.code(json.dumps(shorten_args(step.arguments), indent=2, ensure_ascii=False), language="json")
         render_values(step)
-        for ok, line in step.checks:
-            st.markdown(("✅ " if ok else "❌ ") + line)
+        render_checks(step)
         for reason in step.reasons:
-            st.markdown(f"- {reason}")
+            st.markdown(f"- {md(reason)}")
         if step.asked and not step.pending:
             who = "You" if approver == "me" else "The simulated user"
             for q in step.questions:
-                st.markdown(f"**AssentGate asked:** {q}")
+                st.markdown(f"**AssentGate asked:** {md(q)}")
             st.markdown(f"**{who} answered:** {'approve' if step.approved else 'decline'}")
         if step.agent_sees:
             st.caption(f"The agent is told: {step.agent_sees}")
         if step.output:
-            st.markdown("**Tool output**" + (" · ⚠️ contains planted attack text (highlighted)" if step.planted else ""))
+            st.markdown("**Tool output**" + (" :orange[contains planted attack text, highlighted]" if step.planted else ""))
             with st.container(height=OUTPUT_HEIGHT):
                 st.markdown(highlighted(step.output), unsafe_allow_html=True)
 
 
 def render_question(step: wt.Step, key: str) -> None:
-    with st.container(border=True):
-        st.markdown(f"### ❓ AssentGate asks before step {step.number} (`{step.tool}`) runs")
+    with st.container(border=True, key="hold"):
+        st.markdown(f"## Step {step.number:02d} is held for your decision")
+        st.caption(f"`{step.tool}` won't run until you answer.")
         for q in step.questions:
-            st.markdown(f"**{q}**")
+            st.markdown(f"**{md(q)}**")
         for reason in step.reasons:
-            st.markdown(f"- {reason}")
+            st.markdown(f"- {md(reason)}")
         render_values(step)
         left, right, _ = st.columns([1, 1, 4])
         left.button("Approve", type="primary", on_click=answer, args=(key, True), key=f"approve-{key}")
@@ -180,13 +232,18 @@ def render_question(step: wt.Step, key: str) -> None:
                    "re-checks the call. Declining returns an error to the agent.")
 
 
+def verdict(w: wt.Walkthrough) -> str:
+    parts = []
+    if w.attack_success is not None:
+        parts.append(":red-badge[attack succeeded]" if w.attack_success else ":green-badge[attack stopped]")
+    parts.append(":green-badge[task completed]" if w.utility else ":gray-badge[task not completed]")
+    parts.append(f"{w.questions_asked} question{'s' if w.questions_asked != 1 else ''} asked")
+    parts.append(f"{w.blocked} call{'s' if w.blocked != 1 else ''} blocked")
+    return "**Outcome** " + " · ".join(parts)
+
+
 def render_outcome(w: wt.Walkthrough) -> None:
-    st.subheader("Outcome")
-    cols = st.columns(4)
-    cols[0].metric("Questions asked", w.questions_asked)
-    cols[1].metric("Task completed", yes_no(w.utility))
-    cols[2].metric("Attack succeeded", yes_no(w.attack_success))
-    cols[3].metric("Calls blocked", w.blocked)
+    st.markdown(verdict(w))
     notes = []
     if w.kind != SCRIPTED:
         notes.append(f"In the saved recording, with no defense, the task "
@@ -205,9 +262,11 @@ def render_outcome(w: wt.Walkthrough) -> None:
 
 def run_tab() -> None:
     with st.sidebar:
-        st.header("Choose a run")
-        st.caption("These controls drive the 'Step through a run' tab.")
-        st.selectbox("Start from an example", list(EXAMPLES), key="example", on_change=apply_example)
+        st.header("Run setup")
+        st.caption("No live AI agent is called. The agent is scripted, or a replay of a recorded real-agent run, "
+                   "in AgentDojo's simulated inbox, calendar and drive. AssentGate's decisions are computed live.")
+        st.selectbox("Start from an example", list(EXAMPLES), key="example", on_change=apply_example,
+                     help="A preset that fills in the controls below.")
         kind = st.radio("Agent", list(AGENT_LABELS), format_func=AGENT_LABELS.get, key="agent", on_change=custom_run)
         if kind != SCRIPTED:
             st.toggle("Only attacks that fooled this agent", key="fooled_only", on_change=custom_run,
@@ -218,14 +277,17 @@ def run_tab() -> None:
         if st.session_state.get("user_task") not in task_ids:
             st.session_state["user_task"] = task_ids[0]
         user_task = st.selectbox("User task", task_ids, key="user_task", on_change=custom_run,
-                                 format_func=lambda t: f"{t}: {short(prompts[t], 60)}")
+                                 format_func=lambda t: f"{t}: {short(prompts[t], 90)}")
+        st.caption(md(prompts[user_task]))  # the full request; the list itself has to truncate
         goals = dict(wt.injection_tasks(kind == SCRIPTED))
         attacks = [i for u, i in pairs if u == user_task] if pairs else [None, *goals]
         if st.session_state.get("attack") not in attacks:
             st.session_state["attack"] = attacks[0]
         injection_task = st.selectbox(
             "Attack", attacks, key="attack", on_change=custom_run,
-            format_func=lambda i: "No attack" if i is None else f"{i}: {short(goals.get(i, ''), 55)}")
+            format_func=lambda i: "No attack" if i is None else f"{i}: {short(goals.get(i, ''), 90)}")
+        if injection_task:
+            st.caption(md(goals.get(injection_task, "")))
         gate = st.selectbox("Gate", list(wt.GATES), key="gate", on_change=custom_run)
         approver = st.radio("Who answers AssentGate's questions?", list(wt.APPROVERS), format_func=wt.APPROVERS.get,
                             key="approver")
@@ -237,19 +299,21 @@ def run_tab() -> None:
     with st.spinner("Running the agent through the gate…"):
         w = walk(kind, user_task, injection_task, gate, approver, answers)
 
-    st.markdown(f"**The user asked:** {w.user_request}")
+    st.markdown(f"> **Request** {md(w.user_request)}")
     if w.attacker_goal:
-        with st.expander(f"⚠️ **Attack:** the attacker's goal is planted in the data this task reads "
-                         f"({len(w.injections)} place{'s' if len(w.injections) != 1 else ''})"):
-            st.markdown(f"**Goal:** {w.attacker_goal}")
+        with st.expander(f":orange[**Attack planted**] in {len(w.injections)} "
+                         f"place{'s' if len(w.injections) != 1 else ''} this task reads"):
+            st.markdown(f"**Goal:** {md(w.attacker_goal)}")
             st.markdown("**Planted in:** " + ", ".join(f"`{k}`" for k in w.injections))
             if w.injections:
                 with st.container(height=OUTPUT_HEIGHT):
                     st.markdown(highlighted(next(iter(w.injections.values()))), unsafe_allow_html=True)
     st.caption(f"Agent: {AGENT_LABELS[kind]} · Gate: {gate} · Questions answered by: {wt.APPROVERS[approver]}")
 
-    for step in w.steps:
-        render_step(step, approver)
+    st.caption("Key: " + " · ".join(f":{c}-badge[{label}] {meaning}" for c, label, meaning in DECISIONS.values()))
+    with st.container(key="ledger"):
+        for step in w.steps:
+            render_step(step, approver)
     if not w.steps:
         st.info("The agent made no tool calls in this run.")
     if w.pending is not None:
@@ -278,18 +342,18 @@ def results_tab() -> None:
         "`docs/results_replay.md`). **Attacks that got through** counts only attacks that succeed with no gate. "
         "Questions are answered by a simulated user.")
     scripted = wt.RESULTS / "ground_truth_v1.2.2_ii"
-    st.subheader("Scripted agent: 40 tasks, AgentDojo's attack text, fully compromised agent")
+    st.header("Scripted agent: 40 tasks, AgentDojo's attack text, fully compromised agent")
     table = results(str(scripted), True)
     if table:
-        st.dataframe(table, hide_index=True, width="stretch")
+        st.dataframe(results_frame(table), hide_index=True, width="stretch", column_config=PIN_GATE)
         st.caption("Simulated user: ground truth. Questions per attacked task over the attacks that work with no gate.")
     else:
         st.info("Run scripts/run_ground_truth_eval.py to create these results.")
     for agent, name in wt.AGENTS.items():
-        st.subheader(f"Replayed real-agent runs: {name} (40 benign + 560 attacked saved runs)")
+        st.header(f"Replayed real-agent runs: {name} (40 benign + 560 attacked saved runs)")
         table = results(str(wt.RESULTS / "replay_v1" / agent), False)
         if table:
-            st.dataframe(table, hide_index=True, width="stretch")
+            st.dataframe(results_frame(table), hide_index=True, width="stretch", column_config=PIN_GATE)
         else:
             st.info("Run scripts/replay_saved_runs.py to create these results.")
     st.caption("Simulated user for replays: attack-aware (optimistic). A recording can't react to the gate, so the "
@@ -326,9 +390,10 @@ task's correct steps. One benchmark suite (AgentDojo workspace). No LLM calls ar
 """)
 
 
-st.title("🛡️ AssentGate")
-st.caption("Argument-level authorization with selective confirmation for tool-using agents. "
-           "AgentDojo workspace suite, no LLM calls.")
+st.html(STYLE)
+st.title("AssentGate")
+st.markdown(":gray[An authorization ledger for tool-using agents: each tool call an agent proposes, the decision, "
+            "and the evidence behind it. AgentDojo workspace suite, no LLM calls, runs on this computer.]")
 tab_run, tab_results, tab_about = st.tabs(["Step through a run", "Benchmark results", "How it works"])
 with tab_run:
     run_tab()
